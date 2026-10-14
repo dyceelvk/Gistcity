@@ -18,7 +18,7 @@ jobs:
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
-        run: npm run build && touch dist/.nojekyll
+        run: npm run build && node scripts/check-bundle-secrets.mjs dist && touch dist/.nojekyll
       - name: Push build to gh-pages
         run: |
           cd dist
