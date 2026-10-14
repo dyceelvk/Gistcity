@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b0e0c" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <title>GIST — Your City. Your Style. Your Story.</title>
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <meta name="theme-color" content="#0e1012" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
+    <link rel="icon" type="image/png" href="./icons/icon-192.png" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='18' fill='%23a5ff38'/%3E%3Ctext x='32' y='44' font-family='Arial' font-weight='900' font-size='38' text-anchor='middle' fill='%230b0e0c'%3EG%3C/text%3E%3C/svg%3E" />
+</head>
+<body>
+  <main id="shell">
+    <div id="view" aria-label="GIST 3D world"></div>
+
+    <!-- top bar -->
+    <header class="topbar">
+      <div class="brand"><span class="mark">G</span><span class="brandText">GIST<small>YOUR CITY. YOUR STORY.</small></span></div>
+      <div class="topRight">
+        <div class="pill levelPill" id="levelPill" title="Level"><small>LVL</small><strong id="levelNum">1</strong><i class="xpBar"><b id="xpFill"></b></i></div>
+        <div class="pill wallet"><span class="naira">₦</span><div><small>GIST CASH</small><strong id="cash">₦5,000</strong></div></div>
+        <button class="pill status" id="accountBtn" title="Account & sync"><span class="dot" id="statusDot"></span><span id="statusText">Offline</span></button>
+      </div>
+    </header>
+
+    <canvas id="minimap" width="176" height="176" aria-label="Minimap"></canvas>
+
+    <!-- left column -->
+    <div class="leftCol">
+      <div class="locPill"><span class="live"></span><div><small>YOU ARE IN</small><strong id="district">GIST CITY · CENTRAL</strong></div></div>
+      <div class="objective" id="objective"><div class="objIcon" id="objIcon">✦</div><div><small id="objKicker">YOUR NEXT MOVE</small><strong id="objTitle">Explore Gist City</strong><p id="objText">Walk around, find the glowing markers and start your story.</p></div></div>
+    </div>
+
+    <!-- right column -->
+    <nav class="rightCol">
+      <button class="round" data-open="style" aria-label="Style Studio">✦<span>STYLE</span></button>
+      <button class="round" data-open="life" aria-label="My Life">👤<span>LIFE</span></button>
+      <button class="round" data-open="jobs" aria-label="Hustle">💼<span>HUSTLE</span></button>
+      <button class="round" data-open="map" aria-label="City map">🗺️<span>MAP</span></button>
+      <button class="round" data-open="rank" aria-label="Rankings">🏆<span>RANK</span></button>
+      <button class="round" id="camBtn" aria-label="Camera">◉<span>CAM</span></button>
+    </nav>
+
+    <!-- bottom -->
+    <div class="bottomBar">
+      <div class="playerTag"><div class="avatarMini" id="avatarMini">G</div><div><strong id="playerName">New GistCitizen</strong><small id="playerVibe">CASUAL VIBE</small></div></div>
+      <div class="hint" id="hint"><span>W A S D</span> move · <span>SHIFT</span> run · <span>E</span> interact · drag to look · scroll to zoom</div>
+      <div class="actions">
+        <button class="actBtn runBtn" id="runBtn" aria-label="Toggle run">🏃<span>RUN</span></button>
+        <button class="actBtn interactBtn hidden" id="interactBtn"><span class="iIcon" id="interactIcon">✦</span><span class="iLabel" id="interactLabel">Interact</span></button>
+      </div>
+    </div>
+    <div class="joy" id="joy"><div class="joyKnob" id="joyKnob"></div></div>
+
+    <div class="toast" id="toast"></div>
+    <div class="prompt" id="prompt"><b id="promptKey">E</b><span id="promptText"></span></div>
+
+    <!-- timing minigame -->
+    <div class="minigame hidden" id="minigame">
+      <div class="mgCard">
+        <small id="mgKicker">ROUND 1 / 5</small>
+        <h3 id="mgTitle">Serve the customer</h3>
+        <div class="mgTrack"><div class="mgZone" id="mgZone"></div><div class="mgNeedle" id="mgNeedle"></div></div>
+        <p class="mgResult" id="mgResult">&nbsp;</p>
+        <button class="primary" id="mgTap">TAP!</button>
+      </div>
+    </div>
+
+    <!-- panels -->
+    <section class="panel hidden" id="panel-style">
+      <div class="panelHead"><div><small>MAKE IT YOURS</small><h2>Style Studio</h2></div><button class="close" data-close>×</button></div>
+      <label>Character name</label>
+      <input id="nameInput" maxlength="22" placeholder="Enter a name" autocomplete="off" />
+      <label>One-tap vibe</label>
+      <div class="chips" id="vibeChips"></div>
+      <label>Skin tone</label><div class="swatches" id="skinSwatches"></div>
+      <label>Face shape</label><div class="chips" id="faceChips"></div>
+      <label>Hair</label><div class="chips" id="hairChips"></div>
+      <label>Hair colour</label><div class="swatches" id="hairColors"></div>
+      <label>Beard</label><div class="chips" id="beardChips"></div>
+      <label>Lips / makeup</label><div class="swatches" id="lipSwatches"></div>
+      <label>Top <a class="linkBtn" data-open="store">shop →</a></label><div class="chips" id="topChips"></div><div class="swatches" id="topColors"></div>
+      <label>Bottom</label><div class="chips" id="bottomChips"></div><div class="swatches" id="bottomColors"></div>
+      <label>Shoes</label><div class="swatches" id="shoeColors"></div>
+      <label>Accessories</label><div class="chips" id="accChips"></div>
+      <button class="primary" id="styleDone">LOOKING GOOD — BACK TO THE CITY</button>
+    </section>
+
+    <section class="panel hidden" id="panel-store">
+      <div class="panelHead"><div><small>GIST FITS</small><h2>Store</h2></div><button class="close" data-close>×</button></div>
+      <div class="tabs" id="storeTabs"><button data-tab="top" class="on">Fits</button><button data-tab="accessory">Accessories</button><button data-tab="furniture">Home</button></div>
+      <div class="cards" id="storeCards"></div>
+    </section>
+
+    <section class="panel hidden" id="panel-home">
+      <div class="panelHead"><div><small>GIST HEIGHTS</small><h2>Your Space</h2></div><button class="close" data-close>×</button></div>
+      <p class="muted">Furniture you own appears here. Toggle pieces on and off, or <a class="linkBtn" data-open="store" data-tab="furniture">buy more →</a></p>
+      <div class="cards" id="homeCards"></div>
+    </section>
+
+    <section class="panel hidden" id="panel-jobs">
+      <div class="panelHead"><div><small>HUSTLE HUB</small><h2>Jobs</h2></div><button class="close" data-close>×</button></div>
+      <div id="jobActive"></div>
+      <div class="cards" id="jobCards"></div>
+    </section>
+
+    <section class="panel hidden" id="panel-life">
+      <div class="panelHead"><div><small>MY LIFE</small><h2 id="lifeName">New GistCitizen</h2></div><button class="close" data-close>×</button></div>
+      <div class="statGrid" id="statGrid"></div>
+      <label>Achievements</label>
+      <div class="achievements" id="achievements"></div>
+      <button class="ghost danger" id="resetBtn">Reset my save</button>
+    </section>
+
+    <section class="panel hidden" id="panel-rank">
+      <div class="panelHead"><div><small>THE GIST LEADERBOARD</small><h2>Rankings</h2></div><button class="close" data-close>×</button></div>
+      <p class="muted" id="rankNote"></p>
+      <table class="rankTable"><thead><tr><th>#</th><th>Player</th><th>Pop.</th><th>Lvl</th><th>Cash</th></tr></thead><tbody id="rankBody"></tbody></table>
+    </section>
+
+    <section class="panel hidden" id="panel-map">
+      <div class="panelHead"><div><small>GIST CITY</small><h2>City Map</h2></div><button class="close" data-close>×</button></div>
+      <canvas id="bigmap" width="640" height="640"></canvas>
+      <div class="legend" id="mapLegend"></div>
+    </section>
+
+    <section class="panel hidden" id="panel-account">
+      <div class="panelHead"><div><small>CLOUD SAVE</small><h2>Account</h2></div><button class="close" data-close>×</button></div>
+      <div id="accountBody"></div>
+    </section>
+
+    <!-- loading -->
+    <div class="loading" id="loading"><div class="loadLogo">G</div><strong>ENTERING GIST CITY</strong><span id="loadMsg">Building your neighbourhood…</span><div class="loadBar"><i></i></div></div>
+  </main>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

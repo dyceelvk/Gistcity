@@ -1,0 +1,16 @@
+{
+  "name": "GIST — Your City. Your Style. Your Story.",
+  "short_name": "GIST",
+  "description": "A Nigerian life-simulation game. Create your GistCitizen, dress your way, hustle, and gist. Powered by Crushly.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#0e1012",
+  "theme_color": "#0e1012",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
