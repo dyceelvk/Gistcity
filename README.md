@@ -7,6 +7,10 @@ at Gist Heights, gist with people — and see other players in the city.
 
 GIST is *not* GTA: no weapons, no crime loop. It is a lifestyle and social game.
 
+**▶ Play it now:** https://dyceelvk.github.io/Gistcity/ — open on your Android phone and choose
+*Add to Home screen* to install it like an app. (This is the preview link; production
+hosting is Cloudflare Pages, see below.)
+
 | Piece | Tech |
 | --- | --- |
 | Game | TypeScript + [Three.js](https://threejs.org) + Vite. Runs in any browser, in a Capacitor Android shell, or inside the Crushly app's WebView. |
