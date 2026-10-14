@@ -1,6 +1,6 @@
 // GIST service worker: makes the game installable and playable offline after the first visit.
 // index.html is network-first (so updates arrive); hashed /assets are cache-first (immutable).
-const CACHE = 'gist-v2';
+const CACHE = 'gist-v3';
 const SHELL = ['./', './manifest.webmanifest'];
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));

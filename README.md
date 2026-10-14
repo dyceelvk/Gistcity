@@ -38,12 +38,17 @@ wardrobe, apartment and progress are saved in the browser (`localStorage`).
 
 ## What's in the prototype
 
-- **Character creator (Style Studio)** — skin tone, face shape, 8 hairstyles incl.
-  gele, braids and locs, hair colour, beard, lips/makeup, tops (tee, shirt,
-  hoodie, crop, blazer, native/senator), bottoms (trousers, shorts, joggers,
-  skirt), shoe colour, accessories (cap, shades, chain, bag, watch, earrings),
-  one-tap vibes (Casual, Street, Baddie, Luxury, Corporate). Change anything,
-  any time — from the HUD or your wardrobe.
+- **Human characters** — a skinned, smoothly-deforming body (17-bone skeleton,
+  lofted from anatomical cross-sections) with four body types (slim, regular,
+  athletic, curvy), a sculpted head with a painted face (eyes, brows, nose,
+  lips, makeup), natural walk/run/idle motion and real shadows. No external
+  model files: every look is generated from the `Appearance` schema.
+- **Character creator (Style Studio)** — skin tone, body type, face shape, 8
+  hairstyles incl. gele, braids and locs, hair colour, beard, lips/makeup, tops
+  (tee, shirt, hoodie, crop, blazer, native/senator), bottoms (trousers, shorts,
+  joggers, skirt), shoe colour, accessories (cap, shades, chain, bag, watch,
+  earrings), one-tap vibes (Casual, Street, Baddie, Luxury, Corporate). Change
+  anything, any time — from the HUD or your wardrobe.
 - **Third-person controller** — walk/run with animation, orbit camera with
   building occlusion, circle-vs-box collision with sliding, touch joystick.
 - **Gist City** — roundabout + GIST monument, zebra crossings, danfo, keke, parked
@@ -115,7 +120,7 @@ through `window.ReactNativeWebView.postMessage`.
 
 ```
 src/game/appearance.ts  appearance schema, presets, item catalogue
-src/game/avatar.ts      procedural customizable humanoid + walk/run animation
+src/game/avatar.ts      skinned procedural human (body types, face texture, outfits, gait)
 src/game/world.ts       Gist City generator (buildings, props, zones, NPC paths)
 src/game/interior.ts    your flat + furniture
 src/game/game.ts        controller, interactions, jobs, apartment, sync, loop
@@ -127,8 +132,8 @@ supabase/migrations/    database schema for the game
 
 ## Roadmap (next)
 
-1. Swap the procedural avatar for rigged GLTF characters (same `Appearance`
-   schema) served from Cloudflare; add idle/emote animations.
+1. Optional high-detail character tier: rigged GLTF heads/clothing served from
+   Cloudflare for flagship devices (same `Appearance` schema); emotes.
 2. Server-authoritative economy (RPCs), daily hustles, Community Gist Challenges
    (scenario votes) and creator bonuses with eligibility checks.
 3. Visiting friends' flats, chat bubbles between real players, more districts

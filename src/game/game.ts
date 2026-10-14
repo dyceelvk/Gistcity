@@ -4,6 +4,7 @@
  */
 import * as THREE from 'three';
 import { Avatar } from './avatar';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { CameraRig } from './camera';
 import { Input } from './input';
 import { resolveCircle } from './physics';
@@ -79,6 +80,11 @@ export class Game implements HudHost {
     this.sun.shadow.bias = -0.0006; this.sun.shadow.normalBias = 0.03;
     this.scene.add(this.sun, this.sun.target);
     this.scene.fog = new THREE.Fog('#e9dcc3', 70, 200);
+    // soft image-based light so skin, fabric and metal pick up believable highlights
+    const pmrem = new THREE.PMREMGenerator(this.renderer);
+    this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    this.scene.environmentIntensity = 0.45;
+    pmrem.dispose();
 
     // world
     this.world = buildWorld();

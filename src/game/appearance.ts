@@ -14,6 +14,7 @@ export type TopStyle = 'tee' | 'shirt' | 'blazer' | 'crop' | 'hoodie' | 'native'
 export type BottomStyle = 'trousers' | 'shorts' | 'skirt' | 'joggers';
 export type Accessory = 'cap' | 'glasses' | 'chain' | 'bag' | 'earrings' | 'watch';
 export type Vibe = 'Casual' | 'Street' | 'Baddie' | 'Luxury' | 'Corporate' | 'Custom';
+export type BodyType = 'slim' | 'regular' | 'athletic' | 'curvy';
 
 export interface Appearance {
   skin: string;
@@ -30,6 +31,8 @@ export interface Appearance {
   shoesColor: string;
   accessories: Accessory[];
   vibe: Vibe;
+  /** Body shape. Optional for saves made before it existed (treated as 'regular'). */
+  body?: BodyType;
 }
 
 export const SKIN_TONES = ['#4a2a1c', '#5c3522', '#6e4029', '#86512f', '#9a6240', '#b07a52', '#c58f66', '#d9a981'];
@@ -49,6 +52,12 @@ export const HAIR_STYLES: { id: HairStyle; label: string }[] = [
   { id: 'bun', label: 'Bun' },
   { id: 'gele', label: 'Gele' },
   { id: 'bald', label: 'Bald' },
+];
+export const BODY_TYPES: { id: BodyType; label: string }[] = [
+  { id: 'slim', label: 'Slim' },
+  { id: 'regular', label: 'Regular' },
+  { id: 'athletic', label: 'Athletic' },
+  { id: 'curvy', label: 'Curvy' },
 ];
 export const FACE_SHAPES: { id: FaceShape; label: string }[] = [
   { id: 'oval', label: 'Oval' },
@@ -97,6 +106,7 @@ export const DEFAULT_APPEARANCE: Appearance = {
   shoesColor: '#1a1a1a',
   accessories: [],
   vibe: 'Casual',
+  body: 'regular',
 };
 
 /** One-tap style directions. Items the player does not own are skipped at apply time. */
@@ -206,6 +216,7 @@ export function randomAppearance(seed: number): Appearance {
   const rnd = () => { s = (s * 9301 + 49297) % 233280; return s / 233280; };
   const pickOf = <T>(arr: readonly T[]): T => arr[Math.floor(rnd() * arr.length)];
   const fem = rnd() > 0.5;
+  const bodies: BodyType[] = fem ? ['slim', 'curvy', 'regular', 'curvy'] : ['regular', 'athletic', 'slim', 'athletic'];
   const tops: TopStyle[] = fem ? ['tee', 'crop', 'shirt', 'native', 'blazer'] : ['tee', 'shirt', 'hoodie', 'native', 'blazer'];
   const bottoms: BottomStyle[] = fem ? ['trousers', 'skirt', 'joggers', 'shorts'] : ['trousers', 'joggers', 'shorts'];
   const hairs: HairStyle[] = fem ? ['braids', 'bun', 'afro', 'locs', 'gele', 'lowcut'] : ['lowcut', 'fade', 'afro', 'locs', 'bald'];
@@ -224,6 +235,7 @@ export function randomAppearance(seed: number): Appearance {
     bottomColor: pickOf(['#27323a', '#1a1a1a', '#f4f0e7', '#1f3a93', '#5d4037', '#95a5a6', '#d8b46a']),
     shoesColor: pickOf(['#1a1a1a', '#f4f0e7', '#e74c3c', '#5d4037', '#d8b46a']),
     accessories,
+    body: pickOf(bodies),
     vibe: 'Custom',
   };
 }
