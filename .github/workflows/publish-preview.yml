@@ -1,0 +1,28 @@
+# Rebuilds the game and republishes the preview link (GitHub Pages) on every push to main.
+name: Publish preview (GitHub Pages)
+on:
+  push: { branches: [main] }
+  workflow_dispatch:
+permissions: { contents: write }
+concurrency: { group: preview, cancel-in-progress: true }
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm run typecheck
+      - name: Build
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: npm run build && touch dist/.nojekyll
+      - name: Push build to gh-pages
+        run: |
+          cd dist
+          git init -b gh-pages
+          git config user.name github-actions && git config user.email github-actions@github.com
+          git add -A && git commit -q -m "Publish ${GITHUB_SHA::7}"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" gh-pages

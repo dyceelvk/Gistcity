@@ -1,0 +1,49 @@
+# Deploys the GIST web build to Cloudflare Pages on every push to main.
+#
+# Repository secrets (Settings → Secrets and variables → Actions):
+#   CLOUDFLARE_API_TOKEN     Cloudflare → My Profile → API Tokens → "Edit Cloudflare Workers" template
+#                            (needs Account → Cloudflare Pages → Edit)
+#   CLOUDFLARE_ACCOUNT_ID    Cloudflare dashboard → Workers & Pages → Account ID (right sidebar)
+#   VITE_SUPABASE_URL        Supabase → Project Settings → API → Project URL   (public value)
+#   VITE_SUPABASE_ANON_KEY   Supabase → Project Settings → API → anon/publishable key (public value)
+# Never add the service_role key here — the build refuses secret keys anyway.
+name: Deploy web (Cloudflare Pages)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency: { group: pages, cancel-in-progress: true }
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions: { contents: read, deployments: write }
+    env:
+      CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm run typecheck
+      - name: Build
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: npm run build
+      - name: Refuse to ship a secret key
+        run: |
+          if grep -rEq "sb_secret_|service_role" dist/assets; then echo "A secret key reached the bundle. Aborting."; exit 1; fi
+      - name: Cloudflare not connected yet
+        if: env.CF_TOKEN == '' || env.CF_ACCOUNT == ''
+        run: echo "::notice::Add CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID secrets to deploy to Cloudflare Pages. Skipping."
+      - name: Publish to Cloudflare Pages
+        if: env.CF_TOKEN != '' && env.CF_ACCOUNT != ''
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist --project-name=gist --branch=main

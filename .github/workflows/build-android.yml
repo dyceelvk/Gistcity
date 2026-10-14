@@ -1,0 +1,38 @@
+# Builds an installable Android APK of GIST with Capacitor (debug-signed, for
+# testing on real phones). Download it from the workflow run → Artifacts.
+# Uses the same VITE_* secrets as the web deploy.
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 21 }
+      - uses: android-actions/setup-android@v3
+      - run: npm ci
+      - name: Build web assets
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: npm run build
+      - name: Add Capacitor Android project
+        run: |
+          npm i -D @capacitor/cli@6 @capacitor/core@6 @capacitor/android@6
+          npx cap add android
+          npx cap sync android
+      - name: Assemble debug APK
+        working-directory: android
+        run: chmod +x gradlew && ./gradlew assembleDebug --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GIST-android-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
