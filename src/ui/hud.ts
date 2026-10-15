@@ -7,10 +7,14 @@ import {
   ACCESSORIES, BEARDS, BODY_TYPES, BOTTOMS, BUILDS, CLOTH_COLORS, FACE_SHAPES, HAIR_COLORS, HAIR_STYLES, LIP_COLORS, SHOE_STYLES, SKIN_TONES, STORE, TOPS,
   applyPreset, itemById, ownsAccessory, ownsBottom, ownsFurniture, ownsTop, type Accessory, type ItemCategory, type Vibe,
 } from '../game/appearance';
-import { ACHIEVEMENTS, levelFor, xpForLevel, type PlayerState, type Store } from '../game/state';
+import { ACHIEVEMENTS, fmtG, levelFor, xpForLevel, type PlayerState, type Store } from '../game/state';
 import { JOBS, type JobId } from '../game/jobs';
 import type { World, Zone } from '../game/world';
+import { level as needLevel, type Needs } from '../game/needs';
 import { cloud, type CloudStatus } from '../net/supabase';
+
+/** One entry of the contextual action menu. */
+export interface Action { icon: string; label: string; cost?: number; disabled?: string; run: () => void }
 
 export interface HudHost {
   store: Store;
@@ -28,11 +32,18 @@ export interface HudHost {
   resetSave(): void;
   remotes(): { x: number; z: number; name: string }[];
   award(id: string): void;
+  /** Buy a store item through the economy (server-authorised when online). Resolves true when paid. */
+  buy(id: string): Promise<boolean>;
+  isCreating(): boolean;
+  finishCreation(): Promise<void>;
+  wakeUp(): void;
 }
+
+/** Places on the map that exist in the plan but are not built yet — shown honestly as coming soon. */
+export const COMING_SOON = ['🏫 School', '🏛️ Government office', '🏥 Hospital', '⛪ Church', '🚗 Dealership', '🏦 Bank'];
 
 const $ = <T extends HTMLElement = HTMLElement>(sel: string) => document.querySelector(sel) as T;
 const $$ = <T extends HTMLElement = HTMLElement>(sel: string) => Array.from(document.querySelectorAll(sel)) as T[];
-const naira = (n: number) => '₦' + Math.round(n).toLocaleString('en-NG');
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 
 export class Hud {
@@ -42,7 +53,8 @@ export class Hud {
   private mini = $<HTMLCanvasElement>('#minimap');
   private big = $<HTMLCanvasElement>('#bigmap');
   private currentZone: Zone | null = null;
-  onInteract: (() => void) | null = null;
+  private currentActions: Action[] = [];
+  onAction: ((index: number) => void) | null = null;
 
   constructor(private host: HudHost) {
     const s = host.store;
@@ -51,19 +63,23 @@ export class Hud {
 
     $$('[data-open]').forEach((b) => b.addEventListener('click', (e) => { e.preventDefault(); const tab = b.dataset.tab as ItemCategory | undefined; if (tab) this.storeTab = tab; this.open(b.dataset.open!); }));
     $$('[data-close]').forEach((b) => b.addEventListener('click', () => this.closeAll()));
-    $('#styleDone').addEventListener('click', () => this.closeAll());
+    $('#styleDone').addEventListener('click', () => { if (host.isCreating()) void host.finishCreation(); else this.closeAll(); });
     $('#camBtn').addEventListener('click', () => host.cycleCamera());
     $('#accountBtn').addEventListener('click', () => this.open('account'));
-    $('#interactBtn').addEventListener('click', () => this.onInteract?.());
+    $('#wakeBtn').addEventListener('click', () => host.wakeUp());
     $('#resetBtn').addEventListener('click', () => { if (confirm('Reset your GIST save on this device? This cannot be undone.')) host.resetSave(); });
     $$('#storeTabs button').forEach((b) => b.addEventListener('click', () => { this.storeTab = b.dataset.tab as ItemCategory; this.renderStore(); }));
     const nameInput = $<HTMLInputElement>('#nameInput');
-    nameInput.addEventListener('change', () => { const v = nameInput.value.trim().slice(0, 22); if (v) s.update((st) => { st.name = v; }); });
+    nameInput.addEventListener('change', () => {
+      const v = nameInput.value.trim().slice(0, 24); if (!v) return;
+      s.update((st) => { st.name = v; });
+      if (cloud.signedIn) cloud.updateProfile({ display_name: v }).catch((e) => this.toast(e?.message ?? 'Could not save name'));
+    });
     nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') nameInput.blur(); });
-    cloud.onStatus = (st) => this.renderStatus(st);
     this.renderStatus(cloud.status);
     this.buildStyleControls();
   }
+  cloudStatus(st: CloudStatus) { this.renderStatus(st); }
 
   /* ------------------------------------------------------------ panels */
 
@@ -84,6 +100,7 @@ export class Hud {
     if (id === 'account') this.renderAccount();
   }
   closeAll(resetCamera = true) {
+    if (this.openId === 'style' && this.host.isCreating()) { this.toast('Finish your character first, then tap ENTER GISTCITY'); return; }
     $$('.panel').forEach((p) => p.classList.add('hidden'));
     document.body.classList.remove('panel-open');
     if (this.openId === 'style' && resetCamera) this.host.setPortrait(false);
@@ -111,21 +128,71 @@ export class Hud {
   loaded() { const l = $('#loading'); l.classList.add('done'); setTimeout(() => l.remove(), 700); }
   loadMsg(m: string) { const el = document.getElementById('loadMsg'); if (el) el.textContent = m; }
 
-  /** Show/hide the interact affordance for the zone the player is standing in. */
-  zone(z: Zone | null) {
-    if (z === this.currentZone) return;
-    this.currentZone = z;
-    const btn = $('#interactBtn'), prompt = $('#prompt');
-    if (!z) { btn.classList.add('hidden'); prompt.classList.remove('show'); return; }
-    $('#interactIcon').textContent = z.icon; $('#interactLabel').textContent = z.prompt;
-    $('#promptText').textContent = z.prompt;
-    btn.classList.remove('hidden'); prompt.classList.add('show');
+  /** Contextual action menu for the thing the player is next to. Only actions that can really run are listed. */
+  actions(z: Zone | null, list: Action[]) {
+    this.currentZone = z; this.currentActions = list;
+    const menu = $('#actionMenu');
+    if (!list.length) { menu.classList.add('hidden'); return; }
+    const cash = this.host.store.state.cash;
+    $('#actionTitle').textContent = z ? `${z.icon} ${z.label}` : '';
+    const wrap = $('#actionList'); wrap.innerHTML = '';
+    list.slice(0, 6).forEach((a, i) => {
+      const b = document.createElement('button'); b.className = 'action' + (i === 0 ? ' primary' : '') + (a.disabled ? ' off' : '');
+      const cost = a.cost !== undefined ? `<em class="${cash < a.cost ? 'no' : ''}">${fmtG(a.cost)}</em>` : '';
+      b.innerHTML = `<kbd>${i === 0 ? 'E' : i + 1}</kbd><span class="ic">${a.icon}</span><span class="lb">${esc(a.label)}</span>${cost}`;
+      if (a.disabled) b.title = a.disabled;
+      b.addEventListener('click', () => this.onAction?.(i));
+      wrap.appendChild(b);
+    });
+    menu.classList.remove('hidden');
+  }
+
+  /** Hunger / thirst / energy bars. */
+  needs(n: Needs) {
+    const set = (id: string, v: number) => { const el = $(id); el.style.width = `${Math.round(v)}%`; el.parentElement!.parentElement!.dataset.level = needLevel(v); el.parentElement!.parentElement!.title = `${Math.round(v)}%`; };
+    set('#needHunger', n.hunger); set('#needThirst', n.thirst); set('#needEnergy', n.energy);
+    if (this.openId === 'life') this.renderLife(this.host.store.state);
+  }
+  sleep(on: boolean, energy: number) {
+    const el = $('#sleep'); el.classList.toggle('hidden', !on);
+    if (on) { $('#sleepEnergy').textContent = `${Math.round(energy)}%`; $('#sleepFill').style.width = `${Math.round(energy)}%`; }
+  }
+  emote(e: string) { const el = $('#emote'); el.textContent = e; el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop'); }
+
+  /** Small modal input (amounts, notes). Resolves null when cancelled. */
+  ask(title: string, hint: string, placeholder: string): Promise<string | null> {
+    const root = $('#ask'), input = $<HTMLInputElement>('#askInput'), ok = $('#askOk'), cancel = $('#askCancel');
+    $('#askTitle').textContent = title; $('#askHint').textContent = hint; input.value = ''; input.placeholder = placeholder;
+    root.classList.remove('hidden'); setTimeout(() => input.focus(), 50);
+    return new Promise((resolve) => {
+      const done = (v: string | null) => { root.classList.add('hidden'); ok.removeEventListener('click', onOk); cancel.removeEventListener('click', onCancel); input.removeEventListener('keydown', onKey); resolve(v); };
+      const onOk = () => done(input.value.trim() || null), onCancel = () => done(null);
+      const onKey = (e: KeyboardEvent) => { e.stopPropagation(); if (e.key === 'Enter') onOk(); if (e.key === 'Escape') onCancel(); };
+      ok.addEventListener('click', onOk); cancel.addEventListener('click', onCancel); input.addEventListener('keydown', onKey);
+    });
+  }
+
+  /** Public profile card of another citizen. */
+  async showProfile(id: string, fallbackName: string) {
+    const body = $('#profileBody');
+    body.innerHTML = `<p class="muted">Loading ${esc(fallbackName)}…</p>`;
+    this.open('profile');
+    try {
+      const p = await cloud.publicProfile(id);
+      if (!p) { body.innerHTML = `<p class="muted">${esc(fallbackName)} has no public profile yet.</p>`; return; }
+      body.innerHTML = `<div class="profileHead"><div class="avatarBig">${esc(p.display_name.charAt(0).toUpperCase())}</div><div><strong>${esc(p.display_name)}</strong><small>@${esc(p.username)}</small></div></div>
+        ${p.bio ? `<p class="bio">${esc(p.bio)}</p>` : '<p class="muted">No bio yet.</p>'}
+        <div class="kv"><span>Citizen since</span><span>${new Date(p.created_at).toLocaleDateString()}</span></div>
+        <div class="kv"><span>Level</span><span>${p.level ?? 1}</span></div>
+        <div class="kv"><span>Popularity</span><span>${p.popularity ?? 0}</span></div>
+        <p class="muted" style="margin-top:12px">Friends, messages and posts are coming in the next phase.</p>`;
+    } catch (e: any) { body.innerHTML = `<p class="muted">${esc(e?.message ?? 'Could not load profile')}</p>`; }
   }
 
   /* ---------------------------------------------------------- top bar */
 
   private renderState(st: PlayerState) {
-    $('#cash').textContent = naira(st.cash);
+    $('#cash').textContent = fmtG(st.cash);
     const lvl = levelFor(st.stats.xp), lo = xpForLevel(lvl), hi = xpForLevel(lvl + 1);
     $('#levelNum').textContent = String(lvl);
     $('#xpFill').style.width = `${Math.round(((st.stats.xp - lo) / (hi - lo)) * 100)}%`;
@@ -143,8 +210,8 @@ export class Hud {
     const dot = $('#statusDot'), txt = $('#statusText');
     dot.className = 'dot';
     const map: Record<CloudStatus, [string, string]> = {
-      offline: ['', 'Offline'], connecting: ['warn', 'Connecting'], guest: ['warn', 'Guest'],
-      'signed-in': ['ok', cloud.isAnonymous ? 'Synced' : (cloud.email || 'Synced')], error: ['bad', 'Config error'],
+      offline: ['', 'Practice · offline'], connecting: ['warn', 'Connecting'], guest: ['warn', 'Signed out'],
+      'signed-in': ['ok', this.host.store.state.username ? '@' + this.host.store.state.username : (cloud.email || 'Online')], error: ['bad', 'Config error'],
     };
     const [cls, label] = map[st];
     if (cls) dot.classList.add(cls);
@@ -194,6 +261,8 @@ export class Hud {
 
   private renderStyle(st: PlayerState) {
     const a = st.appearance, inv = st.inventory;
+    $('#styleDone').textContent = this.host.isCreating() ? 'ENTER GISTCITY →' : 'DONE';
+    $('#styleKicker').textContent = this.host.isCreating() ? 'CREATE YOUR CHARACTER · this is how everyone will see you' : 'STYLE STUDIO';
     const nameInput = $<HTMLInputElement>('#nameInput');
     if (document.activeElement !== nameInput) nameInput.value = st.name;
     const mark = (sel: string, val: string) => $$(sel + ' button').forEach((b) => b.classList.toggle('on', b.dataset.v === val));
@@ -207,7 +276,7 @@ export class Hud {
       const id = b.dataset.v!; const ok = owned(id);
       b.classList.toggle('locked', !ok);
       const base = b.textContent!.replace(/\s*🔒.*$/, '');
-      b.innerHTML = ok ? esc(base) : `${esc(base)} <i>🔒 ${naira(priceOf(id) ?? 0)}</i>`;
+      b.innerHTML = ok ? esc(base) : `${esc(base)} <i>🔒 ${fmtG(priceOf(id) ?? 0)}</i>`;
     });
     lock('#topChips', (id) => ownsTop(inv, id as any), (id) => STORE.find((i) => i.unlock.top === id)?.price);
     lock('#bottomChips', (id) => ownsBottom(inv, id as any), (id) => STORE.find((i) => i.unlock.bottom === id)?.price);
@@ -227,7 +296,7 @@ export class Hud {
       const equipped = (it.unlock.top && st.appearance.top === it.unlock.top) || (it.unlock.bottom && st.appearance.bottom === it.unlock.bottom) || (it.unlock.accessory && st.appearance.accessories.includes(it.unlock.accessory)) || (it.unlock.furniture && st.apartment.includes(it.unlock.furniture));
       const icon = it.category === 'top' ? '👕' : it.category === 'bottom' ? '👖' : it.category === 'accessory' ? '🕶️' : '🛋️';
       const card = document.createElement('div'); card.className = 'card';
-      card.innerHTML = `<div class="icon" style="${it.color ? `background:${it.color}22;border:1px solid ${it.color}66` : ''}">${icon}</div><div class="body"><strong>${esc(it.name)}</strong><p>${esc(it.desc)}</p><div class="price">${owned ? 'OWNED' : naira(it.price)}</div></div>`;
+      card.innerHTML = `<div class="icon" style="${it.color ? `background:${it.color}22;border:1px solid ${it.color}66` : ''}">${icon}</div><div class="body"><strong>${esc(it.name)}</strong><p>${esc(it.desc)}</p><div class="price">${owned ? 'OWNED' : fmtG(it.price)}</div></div>`;
       const btn = document.createElement('button'); btn.className = 'btn';
       if (!owned) { btn.textContent = 'BUY'; btn.disabled = st.cash < it.price; btn.addEventListener('click', () => this.buy(it.id)); }
       else if (it.category === 'furniture') { btn.textContent = equipped ? 'PLACED' : 'PLACE'; btn.classList.toggle('owned', !!equipped); btn.addEventListener('click', () => this.toggleFurniture(it.unlock.furniture!)); }
@@ -235,11 +304,16 @@ export class Hud {
       card.appendChild(btn); wrap.appendChild(card);
     }
   }
-  private buy(id: string) {
-    const it = itemById(id); if (!it) return;
+  private buying = false;
+  private async buy(id: string) {
+    const it = itemById(id); if (!it || this.buying) return;
     const s = this.host.store;
-    if (s.state.cash < it.price) { this.toast('Your Gist Cash never reach. Go hustle small!'); return; }
-    s.update((st) => { st.cash -= it.price; st.inventory.push(it.id); if (it.unlock.furniture && !st.apartment.includes(it.unlock.furniture)) st.apartment.push(it.unlock.furniture); });
+    if (s.state.cash < it.price) { this.toast(`You need ${fmtG(it.price)} for that. Go hustle small!`); return; }
+    this.buying = true;
+    const paid = await this.host.buy(id);
+    this.buying = false;
+    if (!paid) { this.renderStore(); return; }
+    s.update((st) => { if (it.unlock.furniture && !st.apartment.includes(it.unlock.furniture)) st.apartment.push(it.unlock.furniture); });
     if (it.category === 'furniture') { this.host.refreshFurniture(); this.host.award('homeowner'); this.toast(`${it.name} delivered to your flat 🛋️`); }
     else { this.equip(id); this.host.award('first-fit'); this.toast(`Fresh! You bought ${it.name} 💚`); }
   }
@@ -298,12 +372,15 @@ export class Hud {
   /* ----------------------------------------------------------------- life */
 
   private renderLife(st: PlayerState) {
-    $('#lifeName').textContent = st.name;
+    $('#lifeName').textContent = st.username ? `${st.name} · @${st.username}` : st.name;
     const lvl = levelFor(st.stats.xp), lo = xpForLevel(lvl), hi = xpForLevel(lvl + 1);
     const bar = (v: number, max: number) => `<i><b style="width:${Math.min(100, Math.round((v / max) * 100))}%"></b></i>`;
     $('#statGrid').innerHTML = [
       ['LEVEL', `${lvl}`, bar(st.stats.xp - lo, hi - lo)],
-      ['GIST CASH', naira(st.cash), ''],
+      ['WALLET', fmtG(st.cash), ''],
+      ['HUNGER', `${Math.round(st.needs.hunger)}%`, bar(st.needs.hunger, 100)],
+      ['THIRST', `${Math.round(st.needs.thirst)}%`, bar(st.needs.thirst, 100)],
+      ['ENERGY', `${Math.round(st.needs.energy)}%`, bar(st.needs.energy, 100)],
       ['POPULARITY', `${st.stats.popularity}`, bar(st.stats.popularity, 100)],
       ['REPUTATION', `${st.stats.reputation}`, bar(st.stats.reputation, 100)],
       ['HUSTLE', `${st.stats.hustle}`, bar(st.stats.hustle, 50)],
@@ -327,43 +404,47 @@ export class Hud {
       rows = [me, { name: 'Tunde (NPC)', popularity: 42, level: 5, cash: 18400 }, { name: 'Chioma (NPC)', popularity: 37, level: 4, cash: 25100 }, { name: 'Emeka (NPC)', popularity: 25, level: 3, cash: 9000 }, { name: 'Aisha (NPC)', popularity: 12, level: 2, cash: 6200 }];
     }
     rows.sort((a, b) => b.popularity - a.popularity || b.level - a.level || b.cash - a.cash);
-    body.innerHTML = rows.map((r, i) => `<tr class="${r.you ? 'you' : ''}"><td>${i + 1}</td><td>${esc(r.name)}${r.you ? ' (you)' : ''}</td><td>${r.popularity}</td><td>${r.level}</td><td>${naira(r.cash)}</td></tr>`).join('');
+    body.innerHTML = rows.map((r, i) => `<tr class="${r.you ? 'you' : ''}"><td>${i + 1}</td><td>${esc(r.name)}${r.you ? ' (you)' : ''}</td><td>${r.popularity}</td><td>${r.level}</td><td>${fmtG(r.cash)}</td></tr>`).join('');
   }
 
   /* -------------------------------------------------------------- account */
 
   private renderAccount() {
     const el = $('#accountBody');
-    const row = (label: string, placeholder: string, action: (email: string) => Promise<void>, cta: string) => {
-      const wrap = document.createElement('div');
-      wrap.innerHTML = `<p class="muted">${label}</p><div class="accountRow"><input type="email" placeholder="${placeholder}" autocomplete="email" /><button>${cta}</button></div>`;
-      const input = wrap.querySelector('input')!, btn = wrap.querySelector('button')!;
-      btn.addEventListener('click', async () => {
-        const email = input.value.trim(); if (!/^\S+@\S+\.\S+$/.test(email)) { this.toast('Enter a valid email'); return; }
-        btn.disabled = true;
-        try { await action(email); this.toast('Check your inbox for the magic link ✉️', 4000); } catch (e: any) { this.toast(e?.message ?? 'Could not send link'); }
-        btn.disabled = false;
-      });
-      return wrap;
-    };
     el.innerHTML = '';
     if (!cloud.enabled) {
-      el.innerHTML = `<div class="kv"><span>Mode</span><span>Offline · saved on this device</span></div><p class="muted" style="margin-top:12px">Cloud save, the live leaderboard and seeing other players switch on when the app is built with <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code> (see README). Your character and progress are still saved locally.</p>`;
+      el.innerHTML = `<div class="kv"><span>Mode</span><span>Practice · saved on this device</span></div><p class="muted" style="margin-top:12px">Accounts, the shared city, the live leaderboard and the real G economy switch on when the app is built with <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code> (see README). Your character and practice balance are saved locally only.</p>`;
       return;
     }
     if (cloud.status === 'error') { el.innerHTML = `<div class="kv"><span>Mode</span><span style="color:var(--danger)">${esc(cloud.error)}</span></div>`; return; }
-    if (cloud.status === 'signed-in' && !cloud.isAnonymous) {
-      el.innerHTML = `<div class="kv"><span>Signed in</span><span>${esc(cloud.email)}</span></div><div class="kv"><span>Cloud save</span><span>On · syncs automatically</span></div><div class="kv"><span>City presence</span><span>Live</span></div>`;
-      const out = document.createElement('button'); out.className = 'ghost'; out.textContent = 'Sign out'; out.addEventListener('click', () => void cloud.signOut()); el.appendChild(out);
-      return;
+    const st = this.host.store.state;
+    el.innerHTML = `<div class="kv"><span>Username</span><span>@${esc(st.username || '—')}</span></div>
+      <div class="kv"><span>Display name</span><span>${esc(st.name)}</span></div>
+      <div class="kv"><span>Email</span><span>${esc(cloud.email)} ${cloud.emailVerified ? '· verified ✓' : '· not verified'}</span></div>
+      <div class="kv"><span>Wallet</span><span>${fmtG(st.cash)}</span></div>
+      <div class="kv"><span>Cloud save</span><span>On · syncs automatically</span></div>`;
+    if (!cloud.emailVerified) {
+      const p = document.createElement('p'); p.className = 'muted'; p.textContent = 'Verify your email to protect your account and enable password reset.'; el.appendChild(p);
+      const b = document.createElement('button'); b.className = 'ghost'; b.textContent = 'Resend verification email';
+      b.addEventListener('click', async () => { b.disabled = true; try { await cloud.resendVerification(cloud.email); this.toast('Verification email sent ✉️'); } catch (e: any) { this.toast(e?.message ?? 'Could not send'); } b.disabled = false; });
+      el.appendChild(b);
     }
-    if (cloud.status === 'signed-in' && cloud.isAnonymous) {
-      el.innerHTML = `<div class="kv"><span>Session</span><span>Guest · synced</span></div><div class="kv"><span>City presence</span><span>Live</span></div>`;
-      el.appendChild(row('Add your email to keep this character on any device.', 'you@example.com', (e) => cloud.linkEmail(e), 'LINK'));
-      return;
-    }
-    el.innerHTML = `<div class="kv"><span>Session</span><span>Not signed in · saved on this device</span></div>`;
-    el.appendChild(row('Sign in with a magic link to sync your progress and appear in the city for other players.', 'you@example.com', (e) => cloud.signInWithEmail(e), 'SEND LINK'));
+    const pw = document.createElement('div');
+    pw.innerHTML = `<p class="muted" style="margin-top:14px">Change password</p><div class="accountRow"><input type="password" placeholder="New password (8+ characters)" autocomplete="new-password" /><button>UPDATE</button></div>`;
+    const input = pw.querySelector('input')!, btn = pw.querySelector('button')!;
+    btn.addEventListener('click', async () => {
+      if (input.value.length < 8) { this.toast('Use at least 8 characters'); return; }
+      btn.disabled = true;
+      try { await cloud.updatePassword(input.value); input.value = ''; this.toast('Password updated 🔒'); } catch (e: any) { this.toast(e?.message ?? 'Could not update password'); }
+      btn.disabled = false;
+    });
+    el.appendChild(pw);
+    const legal = document.createElement('p'); legal.className = 'muted'; legal.style.marginTop = '14px';
+    legal.innerHTML = `<a href="terms.html" target="_blank" rel="noopener">Terms of use</a> · <a href="privacy.html" target="_blank" rel="noopener">Privacy</a>`;
+    el.appendChild(legal);
+    const out = document.createElement('button'); out.className = 'ghost'; out.textContent = 'Sign out';
+    out.addEventListener('click', async () => { out.disabled = true; cloud.leaveCity(); await cloud.signOut(); location.reload(); });
+    el.appendChild(out);
   }
 
   /* -------------------------------------------------------------- minigame */
@@ -419,7 +500,7 @@ export class Hud {
       g.fillStyle = '#d9d2c3'; g.fillRect(-5.5 * rs, -4.5 * rs, 11 * rs, 9 * rs);
       g.strokeStyle = '#6b4a2b'; g.lineWidth = 3; g.strokeRect(-5.5 * rs, -4.5 * rs, 11 * rs, 9 * rs);
       g.font = '12px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
-      g.fillText('🚪', 0, 4.3 * rs); g.fillText('👗', -4.4 * rs, -3.2 * rs); g.fillText('🛋️', 0.5 * rs, -1.2 * rs);
+      g.fillText('🚪', 0, 4.3 * rs); g.fillText('👗', -4.4 * rs, -3.2 * rs); g.fillText('🛋️', 0.5 * rs, -1.2 * rs); g.fillText('🛏️', -2.0 * rs, -3.3 * rs);
       g.restore();
       g.save(); g.translate(w / 2, h / 2); g.rotate(Math.PI - p.yaw);
       g.fillStyle = '#a5ff38'; g.beginPath(); g.moveTo(0, -7); g.lineTo(5, 6); g.lineTo(0, 3); g.lineTo(-5, 6); g.closePath(); g.fill(); g.restore();
@@ -451,7 +532,9 @@ export class Hud {
     for (const r of this.host.remotes()) { g.fillStyle = '#5ad1ff'; g.beginPath(); g.arc(r.x * s, r.z * s, 5, 0, Math.PI * 2); g.fill(); g.fillStyle = '#cfefff'; g.font = '11px sans-serif'; g.fillText(r.name, r.x * s + 8, r.z * s + 4); }
     g.save(); g.translate(p.x * s, p.z * s); g.rotate(Math.PI - p.yaw); g.fillStyle = '#a5ff38'; g.beginPath(); g.moveTo(0, -10); g.lineTo(7, 8); g.lineTo(0, 4); g.lineTo(-7, 8); g.closePath(); g.fill(); g.restore();
     g.restore();
-    $('#mapLegend').innerHTML = this.host.world.zones.map((z) => `<span>${z.icon} ${esc(z.label)}</span>`).join('') + `<span>🟢 you</span><span>🟡 hustle target</span><span>🔵 other players</span>`;
+    const seen = new Set<string>();
+    const places = this.host.world.zones.filter((z) => z.id !== 'seat' && !seen.has(z.label) && seen.add(z.label));
+    $('#mapLegend').innerHTML = places.map((z) => `<span>${z.icon} ${esc(z.label)}</span>`).join('') + `<span>🪑 Benches</span><span>🟢 you</span><span>🟡 hustle target</span><span>🔵 other players</span>` + COMING_SOON.map((c) => `<span class="soon">${c} · coming soon</span>`).join('');
   }
   private paintCity(g: CanvasRenderingContext2D, s: number, labels: boolean) {
     const world = this.host.world;
@@ -462,7 +545,7 @@ export class Hud {
     g.globalAlpha = 1;
     if (labels) { g.fillStyle = '#0b0e0c'; g.font = `bold ${Math.max(9, 3 * s)}px sans-serif`; g.textAlign = 'center'; for (const l of world.landmarks) if (l.label) g.fillText(l.label, l.x * s, l.z * s + 3); g.textAlign = 'left'; }
     g.font = `${labels ? 16 : 11}px sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
-    for (const z of world.zones) { g.fillStyle = '#0b0e0ccc'; g.beginPath(); g.arc(z.x * s, z.z * s, labels ? 12 : 7, 0, Math.PI * 2); g.fill(); g.fillText(z.icon, z.x * s, z.z * s + 1); }
+    for (const z of world.zones) { if (z.id === 'seat' && !labels) continue; g.fillStyle = '#0b0e0ccc'; g.beginPath(); g.arc(z.x * s, z.z * s, labels ? (z.id === 'seat' ? 8 : 12) : 7, 0, Math.PI * 2); g.fill(); g.fillText(z.icon, z.x * s, z.z * s + 1); }
     g.textAlign = 'left'; g.textBaseline = 'alphabetic';
   }
 }

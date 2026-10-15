@@ -12,6 +12,8 @@ export class Input {
   onInteract: (() => void) | null = null;
   onEscape: (() => void) | null = null;
   onToggleRun: (() => void) | null = null;
+  /** Number keys 1–6 pick an entry of the contextual action menu. */
+  onAction: ((index: number) => void) | null = null;
   /** True once the user has touched the screen (we're on a touch device). */
   touch = false;
   private lookPointer: number | null = null;
@@ -28,6 +30,7 @@ export class Input {
       this.keys.add(k);
       if ((k === 'e' || k === ' ') && !e.repeat) this.onInteract?.();
       if (k === 'escape') this.onEscape?.();
+      if (/^[1-6]$/.test(k) && !e.repeat) this.onAction?.(Number(k) - 1);
       if (k === 'capslock' && !e.repeat) { this.runToggle = !this.runToggle; this.onToggleRun?.(); }
     });
     window.addEventListener('keyup', (e) => this.keys.delete(e.key.toLowerCase()));

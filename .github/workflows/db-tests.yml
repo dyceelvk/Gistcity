@@ -1,0 +1,34 @@
+name: Database tests
+
+# Applies every migration to a fresh PostgreSQL 17 (twice — idempotency) and
+# runs the behavioural SQL tests for accounts, RLS and the G economy.
+on:
+  push:
+    branches: [main]
+    paths: ['supabase/**', '.github/workflows/db-tests.yml']
+  pull_request:
+    paths: ['supabase/**']
+  workflow_dispatch:
+
+jobs:
+  sql:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install psql
+        run: sudo apt-get update -q && sudo apt-get install -y -q postgresql-client
+      - name: Run migrations + tests
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: supabase/tests/run_local.sh

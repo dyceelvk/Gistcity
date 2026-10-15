@@ -7,6 +7,9 @@ import { mat } from './avatar';
 import { AABB, box, cyl, textTexture } from './props';
 import type { Zone } from './world';
 
+/** Where the bed / mattress stands (also used to lay the character down). */
+export const BED_SPOT = { x: -2.0, z: -3.3 };
+
 export interface Interior {
   group: THREE.Group;
   colliders: AABB[];
@@ -56,6 +59,7 @@ export function buildInterior(): Interior {
   group.visible = false;
   const colliders: AABB[] = [];
   const W = 11, D = 9, H = 3.1;
+  const BED = BED_SPOT;
 
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(W, D), new THREE.MeshStandardMaterial({ map: tileTexture(), roughness: 0.6 }));
   floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; group.add(floor);
@@ -111,12 +115,12 @@ export function buildInterior(): Interior {
   const furnitureColliders: AABB[] = [];
   const build: Record<string, (g: THREE.Group, c: AABB[]) => void> = {
     bed: (g, c) => {
-      box(g, 2.0, 0.35, 1.9, mat('#6b4a2b', 0.9), -3.6, 0.18, -2.9);
-      box(g, 1.9, 0.3, 1.8, mat('#f4f0e7', 0.9), -3.6, 0.5, -2.9);
-      box(g, 1.9, 0.12, 1.1, mat('#2f6f4f', 0.9), -3.6, 0.7, -2.6);
-      box(g, 0.7, 0.14, 0.45, mat('#ffffff', 0.9), -4.05, 0.72, -3.55); box(g, 0.7, 0.14, 0.45, mat('#ffffff', 0.9), -3.15, 0.72, -3.55);
-      box(g, 2.0, 1.1, 0.12, mat('#6b4a2b', 0.9), -3.6, 0.6, -3.9);
-      c.push({ minX: -4.6, maxX: -2.6, minZ: -3.9, maxZ: -1.95, h: 0.8 });
+      box(g, 2.0, 0.35, 1.9, mat('#6b4a2b', 0.9), BED.x, 0.18, BED.z);
+      box(g, 1.9, 0.3, 1.8, mat('#f4f0e7', 0.9), BED.x, 0.5, BED.z);
+      box(g, 1.9, 0.12, 1.1, mat('#2f6f4f', 0.9), BED.x, 0.7, BED.z + 0.3);
+      box(g, 0.7, 0.14, 0.45, mat('#ffffff', 0.9), BED.x - 0.45, 0.72, BED.z - 0.65); box(g, 0.7, 0.14, 0.45, mat('#ffffff', 0.9), BED.x + 0.45, 0.72, BED.z - 0.65);
+      box(g, 2.0, 1.1, 0.12, mat('#6b4a2b', 0.9), BED.x, 0.6, BED.z - 1.0);
+      c.push({ minX: BED.x - 1.0, maxX: BED.x + 1.0, minZ: BED.z - 1.0, maxZ: BED.z + 0.95, h: 0.8 });
     },
     sofa: (g, c) => {
       const m = mat('#7a2d5b', 0.95);
@@ -170,21 +174,36 @@ export function buildInterior(): Interior {
     },
   };
   const all = colliders;
+  const zones: Zone[] = [
+    { id: 'exit', label: 'Front door', icon: '🚪', x: 0, z: 3.4, radius: 1.5, prompt: 'Step outside' },
+    { id: 'wardrobe', label: 'Wardrobe', icon: '👗', x: -4.4, z: -1.2, radius: 1.3, prompt: 'Open wardrobe' },
+    { id: 'decor', label: 'Decorate', icon: '🛋️', x: 0.5, z: -1.2, radius: 1.4, prompt: 'Decorate your space' },
+  ];
+  const staticZones = zones.length;
+  // Every flat comes with a mattress on the floor; the Queen Bed from the store replaces it.
+  build.mattress = (g, c) => {
+    box(g, 1.9, 0.22, 1.8, mat('#5d6b86', 0.95), BED.x, 0.11, BED.z);
+    box(g, 1.92, 0.03, 1.82, mat('#f4f0e7', 0.9), BED.x, 0.225, BED.z);
+    box(g, 1.9, 0.08, 1.0, mat('#2f6f4f', 0.9), BED.x, 0.26, BED.z + 0.3);
+    box(g, 0.6, 0.12, 0.4, mat('#ffffff', 0.9), BED.x, 0.28, BED.z - 0.6);
+    c.push({ minX: BED.x - 0.95, maxX: BED.x + 0.95, minZ: BED.z - 0.9, maxZ: BED.z + 0.9, h: 0.3 });
+  };
   const setFurniture = (placed: string[]) => {
     while (furniture.children.length) furniture.remove(furniture.children[0]);
     furnitureColliders.length = 0;
+    if (!placed.includes('bed')) build.mattress(furniture, furnitureColliders);
     for (const id of placed) build[id]?.(furniture, furnitureColliders);
+    // interaction zones that depend on furniture
+    zones.length = staticZones;
+    zones.push({ id: 'bed', label: placed.includes('bed') ? 'Your bed' : 'Mattress', icon: '🛏️', x: BED.x, z: BED.z, radius: 1.9, prompt: 'Sleep', data: { bedTop: placed.includes('bed') ? 0.66 : 0.24 } });
+    if (placed.includes('sofa')) zones.push({ id: 'seat', label: 'Velvet sofa', icon: '🛋️', x: 2.0, z: 0.5, radius: 1.7, prompt: 'Sit down', data: { seats: [{ x: 2.1, z: 0.15, yaw: Math.PI / 2, h: 0.5 }, { x: 2.1, z: 0.9, yaw: Math.PI / 2, h: 0.5 }] } });
+    if (placed.includes('dining')) zones.push({ id: 'seat', label: 'Dining chair', icon: '🪑', x: -1.5, z: 2.6, radius: 1.5, prompt: 'Sit down', data: { seats: [{ x: -2.4, z: 2.6, yaw: Math.PI / 2, h: 0.48 }, { x: -0.6, z: 2.6, yaw: -Math.PI / 2, h: 0.48 }] } });
     // rebuild the collider list: static walls + current furniture
     all.length = staticCount;
     all.push(...furnitureColliders);
   };
   const staticCount = colliders.length;
 
-  const zones: Zone[] = [
-    { id: 'exit', label: 'Front door', icon: '🚪', x: 0, z: 3.4, radius: 1.5, prompt: 'Step outside' },
-    { id: 'wardrobe', label: 'Wardrobe', icon: '👗', x: -4.4, z: -2.7, radius: 1.5, prompt: 'Open wardrobe' },
-    { id: 'decor', label: 'Decorate', icon: '🛋️', x: 0.5, z: -1.2, radius: 1.6, prompt: 'Decorate your space' },
-  ];
 
   return { group, colliders, zones, spawn: new THREE.Vector3(0, 0, 2.2), spawnYaw: Math.PI, setFurniture, light };
 }

@@ -21,6 +21,18 @@ export interface Zone {
   x: number; z: number;
   radius: number;
   prompt: string;
+  /** Extra data for the interaction (e.g. the seats of a bench). */
+  data?: { seats?: Seat[]; bedTop?: number };
+}
+
+/** Somewhere a character can sit: position, facing yaw and seat height. */
+export interface Seat { x: number; z: number; yaw: number; h: number }
+
+/** The two seats of a park bench placed with props.bench(x, z, rotY). */
+export function benchSeats(x: number, z: number, rotY: number): Seat[] {
+  const c = Math.cos(rotY), sn = Math.sin(rotY);
+  const lz = -0.1; // hips just in front of the backrest
+  return [-0.4, 0.4].map((lx) => ({ x: x + lx * c + lz * sn, z: z - lx * sn + lz * c, yaw: rotY, h: 0.48 }));
 }
 
 export interface Landmark { x: number; z: number; w: number; d: number; color: string; label?: string }
@@ -293,12 +305,14 @@ export function buildWorld(): World {
   animated.push((dt, t) => { puffs.forEach((p, i) => { p.position.y += dt * 0.6; p.position.x = -13 + Math.sin(t * 1.3 + i) * 0.25; const life = (p.position.y - 1.2) / 3.2; p.scale.setScalar(0.4 + life * 1.1); (p.material as THREE.SpriteMaterial).opacity = Math.max(0, 0.4 - life * 0.4); if (life > 1) p.position.y = 1.2; }); });
   umbrella(group, -17, 14, '#e74c3c'); umbrella(group, -17.5, 20, '#f5c242');
   bench(group, -17, 16.2, 0, colliders); bench(group, -17.5, 22.2, 0, colliders);
-  zones.push({ id: 'suya', label: 'Suya Spot', icon: '🍢', x: -10, z: 17.5, radius: 2.4, prompt: 'Buy suya · ₦500' });
+  zones.push({ id: 'seat', label: 'Park bench', icon: '🪑', x: -17, z: 16.2, radius: 1.6, prompt: 'Sit down', data: { seats: benchSeats(-17, 16.2, 0) } });
+  zones.push({ id: 'seat', label: 'Park bench', icon: '🪑', x: -17.5, z: 22.2, radius: 1.6, prompt: 'Sit down', data: { seats: benchSeats(-17.5, 22.2, 0) } });
+  zones.push({ id: 'suya', label: 'Suya Spot', icon: '🍢', x: -10, z: 17.5, radius: 2.4, prompt: 'Order' });
 
   building(group, colliders, landmarks, -32, 15, 13, 10, 1, { style: 'shop', facing: 'n', color: '#e4c067', sign: 'MAMA NKECHI KITCHEN', signColors: ['#2ecc71', '#0b0e0c'] });
-  zones.push({ id: 'buka', label: 'Mama Nkechi Kitchen', icon: '🍲', x: -32, z: 8.2, radius: 2.4, prompt: 'Eat · ₦800' });
+  zones.push({ id: 'buka', label: 'Mama Nkechi Kitchen', icon: '🍲', x: -32, z: 8.2, radius: 2.4, prompt: 'Order' });
   building(group, colliders, landmarks, -19, 36, 14, 12, 2, { style: 'lounge', facing: 'e', color: '#1e1526', sign: 'VIBE LOUNGE' });
-  zones.push({ id: 'lounge', label: 'Vibe Lounge', icon: '🪩', x: -9.8, z: 36, radius: 2.6, prompt: 'Pull up · ₦1,500' });
+  zones.push({ id: 'lounge', label: 'Vibe Lounge', icon: '🪩', x: -9.8, z: 36, radius: 2.6, prompt: 'Pull up' });
   building(group, colliders, landmarks, -39, 33, 12, 12, 3, { facing: 'w', color: '#d6b58a', balconies: true, tank: true });
   building(group, colliders, landmarks, -38, 44, 11, 6, 1, { style: 'bungalow', facing: 's', color: '#b9d5e8' });
   tree(group, -28, 26, 1.1, colliders); palm(group, -26, 44, 1, colliders);
@@ -351,6 +365,8 @@ export function buildWorld(): World {
     for (const [lx, lz] of [[px - pw / 2 - 1, pz - pd / 2 - 1], [px + pw / 2 + 1, pz - pd / 2 - 1], [px - pw / 2 - 1, pz + pd / 2 + 1], [px + pw / 2 + 1, pz + pd / 2 + 1]]) streetLamp(group, lx, lz, colliders);
     signboard(group, 'THE PITCH', 5, 1.0, px - pw / 2 - 1.2, 3.8, pz, -Math.PI / 2, '#2ecc71', '#0b0e0c', '5-a-side · bring your boots');
     bench(group, px - pw / 2 - 2.5, pz - 6, Math.PI / 2, colliders); bench(group, px - pw / 2 - 2.5, pz + 6, Math.PI / 2, colliders);
+    zones.push({ id: 'seat', label: 'Pitch-side bench', icon: '🪑', x: px - pw / 2 - 2.5, z: pz - 6, radius: 1.6, prompt: 'Sit down', data: { seats: benchSeats(px - pw / 2 - 2.5, pz - 6, Math.PI / 2) } });
+    zones.push({ id: 'seat', label: 'Pitch-side bench', icon: '🪑', x: px - pw / 2 - 2.5, z: pz + 6, radius: 1.6, prompt: 'Sit down', data: { seats: benchSeats(px - pw / 2 - 2.5, pz + 6, Math.PI / 2) } });
     zones.push({ id: 'pitch', label: 'The Pitch', icon: '⚽', x: px - pw / 2 + 2.5, z: pz, radius: 2.8, prompt: 'Play a penalty shootout' });
     landmarks.push({ x: px, z: pz, w: pw, d: pd, color: '#3f9a4a', label: 'THE PITCH' });
   }
@@ -378,7 +394,7 @@ export function buildWorld(): World {
   {
     const g = new THREE.Group(); g.position.set(0, 0, -86); group.add(g);
     for (const px of [-3, 3]) cyl(g, 0.15, 0.15, 7, mat('#4b4b4b', 0.6, 0.4), px, 3.5, 0, 8);
-    signboard(g, 'GIST', 10, 3.6, 0, 8.5, 0, 0, '#0b0e0c', '#a5ff38', 'YOUR CITY. YOUR STYLE. YOUR STORY.  ·  powered by Crushly');
+    signboard(g, 'GIST', 10, 3.6, 0, 8.5, 0, 0, '#0b0e0c', '#a5ff38', 'YOUR CITY. YOUR STYLE. YOUR STORY.  ·  powered by Riel Inc.');
   }
 
   // ---- street furniture -----------------------------------------------------

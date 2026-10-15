@@ -182,6 +182,9 @@ export class Human {
   height = 1.7;
   private rig: Rig | null = null;
   private weights = { idle: 1, walk: 0, run: 0 };
+  private pose: 'none' | 'sit' | 'sleep' = 'none';
+  private poseW = 0;
+  hipHeight = 0.86;
   private hairMesh: THREE.SkinnedMesh | null = null;
   private shoeMesh: THREE.SkinnedMesh | null = null;
 
@@ -225,7 +228,51 @@ export class Human {
     const walkMps = mps ?? 3.3, runMps = mps ?? 6.4;
     r.actions.walk.timeScale = THREE.MathUtils.clamp(walkMps / (WALK_STRIDE * WALK_CYCLES_PER_S), 0.35, 2.2);
     r.actions.run.timeScale = THREE.MathUtils.clamp(runMps / (RUN_STRIDE * WALK_CYCLES_PER_S), 0.5, 2.2);
+    // undo last frame's pose offsets first: bones without animation tracks are
+    // not rewritten by the mixer and would otherwise accumulate rotation.
+    for (const [bone, q] of this.poseBackup) bone.quaternion.copy(q);
+    this.poseBackup.clear();
     r.mixer.update(dt);
+    const targetW = this.pose === 'sit' ? 1 : 0;
+    this.poseW += (targetW - this.poseW) * Math.min(1, dt * 7);
+    if (this.poseW > 0.002) this.applySit(this.poseW);
+  }
+  private poseBackup = new Map<THREE.Bone, THREE.Quaternion>();
+
+  setPose(pose: 'none' | 'sit' | 'sleep') { this.pose = pose; }
+
+  /**
+   * Seated pose layered over the animation: thighs forward, shins down, a
+   * relaxed spine and the arms resting on the lap. Rotations are expressed in
+   * the character's own frame (+z forward) and applied in world space so they
+   * are independent of each bone's local axes.
+   */
+  private static SIT: [string, number, number, number][] = [
+    // bone, rotX (forward +), rotY, rotZ in degrees
+    ['thigh_l', -88, 0, 6], ['thigh_r', -88, 0, -6],
+    ['calf_l', 86, 0, 0], ['calf_r', 86, 0, 0],
+    ['spine_01', 6, 0, 0], ['spine_02', 4, 0, 0],
+    ['upperarm_l', -28, 0, 10], ['upperarm_r', -28, 0, -10],
+    ['lowerarm_l', -36, 0, 0], ['lowerarm_r', -36, 0, 0],
+  ];
+  private tmpQ = new THREE.Quaternion(); private tmpQ2 = new THREE.Quaternion(); private tmpQ3 = new THREE.Quaternion(); private tmpE = new THREE.Euler();
+  private applySit(w: number) {
+    const r = this.rig!;
+    const rootQ = this.root.getWorldQuaternion(this.tmpQ3);
+    for (const [name, rx, ry, rz] of Human.SIT) {
+      const bone = r.bones.get(name); if (!bone || !bone.parent) continue;
+      bone.parent.updateWorldMatrix(true, false);
+      const P = bone.parent.getWorldQuaternion(this.tmpQ2);
+      // R_world = rootQ * R_char * rootQ^-1 ; L' = (P^-1 R_world P) * L
+      const R = this.tmpQ.setFromEuler(this.tmpE.set(THREE.MathUtils.degToRad(rx), THREE.MathUtils.degToRad(ry), THREE.MathUtils.degToRad(rz), 'XYZ'));
+      R.premultiply(rootQ).multiply(rootQ.clone().invert());
+      const Pi = P.clone().invert();
+      const local = Pi.multiply(R).multiply(P);
+      if (w < 0.999) local.slerp(new THREE.Quaternion(), 1 - w);
+      this.poseBackup.set(bone, bone.quaternion.clone());
+      bone.quaternion.premultiply(local);
+      bone.updateMatrixWorld(false);
+    }
   }
 
   /* ---------------------------------------------------------------- rig */
@@ -271,6 +318,11 @@ export class Human {
     this.root.add(scene);
     this.height = model.info.height_m;
     this.rig = { sex, model, scene, mixer, actions, meshes, bones, body, skinMat, hideMask, dynamic: [], ownedMats: [] };
+    // Seat height reference: the hip joint in the bind pose, minus the buttocks.
+    scene.updateMatrixWorld(true);
+    const thigh = bones.get('thigh_l');
+    if (thigh) { const p = new THREE.Vector3(); thigh.getWorldPosition(p); scene.worldToLocal(p); this.hipHeight = p.y - 0.1; }
+    else if (typeof model.info.crotch_y === 'number') this.hipHeight = model.info.crotch_y + 0.06;
   }
 
   private clearDynamic() {

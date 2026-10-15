@@ -6,9 +6,9 @@ import type { World } from './world';
 export type JobId = 'dispatch' | 'market' | 'pos';
 export interface JobDef { id: JobId; title: string; desc: string; pay: string; icon: string }
 export const JOBS: JobDef[] = [
-  { id: 'dispatch', title: 'Dispatch rider', desc: 'Pick up a package at the Hub and deliver it across town before the timer runs out.', pay: '₦1,500 + speed bonus', icon: '📦' },
-  { id: 'market', title: 'Market runs', desc: 'Mama Bisi needs five crates gathered from the market before customers arrive.', pay: '₦2,000 + bonus', icon: '🧺' },
-  { id: 'pos', title: 'POS agent', desc: 'Man the QuickCash stand and serve five customers — tap in the green zone.', pay: '₦400 per customer', icon: '💳' },
+  { id: 'dispatch', title: 'Dispatch rider', desc: 'Pick up a package at the Hub and deliver it across town before the timer runs out.', pay: '1,500 G', icon: '📦' },
+  { id: 'market', title: 'Market runs', desc: 'Mama Bisi needs five crates gathered from the market before customers arrive.', pay: '2,000 G', icon: '🧺' },
+  { id: 'pos', title: 'POS agent', desc: 'Man the QuickCash stand and serve five customers — tap in the green zone.', pay: '2,000 G (serve 3+ of 5)', icon: '💳' },
 ];
 
 /** Glowing ring + floating icon used for zones and job targets. */
@@ -30,7 +30,8 @@ export function animateMarker(m: THREE.Group, t: number, phase = 0) {
 
 export interface JobCallbacks {
   toast(msg: string): void;
-  reward(cash: number, xp: number, hustle: number): void;
+  /** Pay for a finished gig. The amount is decided by the server pay table (jobId); xp is client-side. */
+  reward(jobId: JobId, xp: number, hustle: number): void;
   objective(title: string, text: string): void;
   clearObjective(): void;
   /** Run the timing minigame. Resolves with the number of successes. */
@@ -117,8 +118,8 @@ export class JobSystem {
     if (a.id === 'dispatch' && a.dest) {
       if (Math.hypot(playerPos.x - a.dest.x, playerPos.z - a.dest.z) < 2.6) {
         const bonus = Math.round(Math.max(0, a.timeLeft) * 7);
-        this.cb.reward(1500 + bonus, 45, 1);
-        this.cb.toast(`Delivered! ₦1,500 + ₦${bonus.toLocaleString()} speed bonus 💚`);
+        this.cb.reward('dispatch', 45 + Math.round(bonus / 50), 1);
+        this.cb.toast(`Delivered on time! +${Math.round(bonus / 50)} bonus XP 💚`);
         this.cancel(true);
       }
     } else if (a.id === 'market') {
@@ -132,8 +133,8 @@ export class JobSystem {
       }
       if (a.collected >= 5) {
         const bonus = Math.round(Math.max(0, a.timeLeft) * 8);
-        this.cb.reward(2000 + bonus, 55, 1);
-        this.cb.toast(`Mama Bisi is happy! ₦2,000 + ₦${bonus.toLocaleString()} bonus 💚`);
+        this.cb.reward('market', 55 + Math.round(bonus / 50), 1);
+        this.cb.toast(`Mama Bisi is happy! +${Math.round(bonus / 50)} bonus XP 💚`);
         this.cancel(true);
       }
     } else if (a.id === 'pos' && a.target) {
@@ -142,8 +143,8 @@ export class JobSystem {
         if (a.marker) { this.layer.remove(a.marker); a.marker = null; }
         this.cb.objective('POS agent', 'Serving customers… tap when the marker is in the green zone.');
         const ok = await this.cb.timing(5, 'QuickCash POS · serve the customer', 'Transaction approved ✅', 'Network error ❌ — customer vexed');
-        this.cb.reward(ok * 400, ok * 12, ok >= 3 ? 1 : 0);
-        this.cb.toast(ok === 5 ? 'Perfect shift! ₦2,000 earned 💚' : `Shift over: ${ok}/5 customers served, ₦${(ok * 400).toLocaleString()} earned`);
+        if (ok >= 3) this.cb.reward('pos', ok * 12, 1); else this.cb.toast(`Only ${ok}/5 customers served — no pay this shift. Try again.`);
+        this.cb.toast(ok === 5 ? 'Perfect shift! 💚' : `Shift over: ${ok}/5 customers served.`);
         this.cancel(true);
       }
     }

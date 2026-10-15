@@ -24,7 +24,7 @@
       <div class="brand"><span class="mark">G</span><span class="brandText">GIST<small>YOUR CITY. YOUR STORY.</small></span></div>
       <div class="topRight">
         <div class="pill levelPill" id="levelPill" title="Level"><small>LVL</small><strong id="levelNum">1</strong><i class="xpBar"><b id="xpFill"></b></i></div>
-        <div class="pill wallet"><span class="naira">₦</span><div><small>GIST CASH</small><strong id="cash">₦5,000</strong></div></div>
+        <div class="pill wallet" title="Your G wallet"><span class="naira">G</span><div><small>WALLET</small><strong id="cash">10,000 G</strong></div></div>
         <button class="pill status" id="accountBtn" title="Account & sync"><span class="dot" id="statusDot"></span><span id="statusText">Offline</span></button>
       </div>
     </header>
@@ -35,6 +35,11 @@
     <div class="leftCol">
       <div class="locPill"><span class="live"></span><div><small>YOU ARE IN</small><strong id="district">GIST CITY · CENTRAL</strong></div></div>
       <div class="objective" id="objective"><div class="objIcon" id="objIcon">✦</div><div><small id="objKicker">YOUR NEXT MOVE</small><strong id="objTitle">Explore Gist City</strong><p id="objText">Walk around, find the glowing markers and start your story.</p></div></div>
+      <div class="needs" id="needs" aria-label="Needs">
+        <div class="need" data-level="ok"><span>🍛</span><i><b id="needHunger"></b></i></div>
+        <div class="need" data-level="ok"><span>💧</span><i><b id="needThirst"></b></i></div>
+        <div class="need" data-level="ok"><span>⚡</span><i><b id="needEnergy"></b></i></div>
+      </div>
     </div>
 
     <!-- right column -->
@@ -50,16 +55,21 @@
     <!-- bottom -->
     <div class="bottomBar">
       <div class="playerTag"><div class="avatarMini" id="avatarMini">G</div><div><strong id="playerName">New GistCitizen</strong><small id="playerVibe">CASUAL VIBE</small></div></div>
-      <div class="hint" id="hint"><span>W A S D</span> move · <span>SHIFT</span> run · <span>E</span> interact · drag to look · scroll to zoom</div>
+      <div class="hint" id="hint"><span>W A S D</span> move · <span>SHIFT</span> run · <span>E</span> / <span>1-6</span> actions · drag to look · scroll to zoom</div>
       <div class="actions">
         <button class="actBtn runBtn" id="runBtn" aria-label="Toggle run">🏃<span>RUN</span></button>
-        <button class="actBtn interactBtn hidden" id="interactBtn"><span class="iIcon" id="interactIcon">✦</span><span class="iLabel" id="interactLabel">Interact</span></button>
       </div>
     </div>
+    <!-- contextual action menu: only actions that can really run are listed -->
+    <div class="actionMenu hidden" id="actionMenu"><small id="actionTitle"></small><div id="actionList"></div></div>
+    <div class="emote" id="emote"></div>
     <div class="joy" id="joy"><div class="joyKnob" id="joyKnob"></div></div>
 
     <div class="toast" id="toast"></div>
-    <div class="prompt" id="prompt"><b id="promptKey">E</b><span id="promptText"></span></div>
+    <!-- sleeping overlay -->
+    <div class="sleep hidden" id="sleep"><div class="sleepCard"><strong>Sleeping…</strong><p>Energy <span id="sleepEnergy">0%</span></p><i class="sleepBar"><b id="sleepFill"></b></i><button class="primary" id="wakeBtn">WAKE UP</button></div></div>
+    <!-- small input dialog -->
+    <div class="ask hidden" id="ask"><div class="askCard"><strong id="askTitle"></strong><p class="muted" id="askHint"></p><input id="askInput" inputmode="numeric" autocomplete="off" /><div class="askRow"><button class="ghost" id="askCancel">Cancel</button><button class="primary" id="askOk">SEND</button></div></div></div>
 
     <!-- timing minigame -->
     <div class="minigame hidden" id="minigame">
@@ -74,9 +84,9 @@
 
     <!-- panels -->
     <section class="panel hidden" id="panel-style">
-      <div class="panelHead"><div><small>MAKE IT YOURS</small><h2>Style Studio</h2></div><button class="close" data-close>×</button></div>
-      <label>Character name</label>
-      <input id="nameInput" maxlength="22" placeholder="Enter a name" autocomplete="off" />
+      <div class="panelHead"><div><small id="styleKicker">STYLE STUDIO</small><h2>Your Character</h2></div><button class="close" data-close>×</button></div>
+      <label>Display name</label>
+      <input id="nameInput" maxlength="24" placeholder="Enter a name" autocomplete="off" />
       <label>One-tap vibe</label>
       <div class="chips" id="vibeChips"></div>
       <label>Skin tone</label><div class="swatches" id="skinSwatches"></div>
@@ -91,7 +101,7 @@
       <label>Bottom</label><div class="chips" id="bottomChips"></div><div class="swatches" id="bottomColors"></div>
       <label>Shoes</label><div class="chips" id="shoeChips"></div><div class="swatches" id="shoeColors"></div>
       <label>Accessories</label><div class="chips" id="accChips"></div>
-      <button class="primary" id="styleDone">LOOKING GOOD — BACK TO THE CITY</button>
+      <button class="primary" id="styleDone">DONE</button>
     </section>
 
     <section class="panel hidden" id="panel-store">
@@ -133,12 +143,20 @@
     </section>
 
     <section class="panel hidden" id="panel-account">
-      <div class="panelHead"><div><small>CLOUD SAVE</small><h2>Account</h2></div><button class="close" data-close>×</button></div>
+      <div class="panelHead"><div><small>YOUR ACCOUNT</small><h2>Account</h2></div><button class="close" data-close>×</button></div>
       <div id="accountBody"></div>
     </section>
 
+    <section class="panel hidden" id="panel-profile">
+      <div class="panelHead"><div><small>CITIZEN</small><h2>Profile</h2></div><button class="close" data-close>×</button></div>
+      <div id="profileBody"></div>
+    </section>
+
+    <!-- sign in / create account (shown only when the game runs with a backend) -->
+    <div class="auth hidden" id="auth"></div>
+
     <!-- loading -->
-    <div class="loading" id="loading"><div class="loadLogo">G</div><strong>ENTERING GIST CITY</strong><span id="loadMsg">Building your neighbourhood…</span><div class="loadBar"><i></i></div></div>
+    <div class="loading" id="loading"><div class="loadLogo">G</div><strong>ENTERING GISTCITY</strong><span id="loadMsg">Building your neighbourhood…</span><div class="loadBar"><i></i></div><em class="poweredBy">Powered by Riel Inc.</em></div>
   </main>
   <script type="module" src="/src/main.ts"></script>
 </body>

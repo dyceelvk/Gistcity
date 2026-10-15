@@ -8,12 +8,18 @@ import type { Appearance } from './appearance';
 import { Avatar } from './avatar';
 import { Human, humanLibrary, type Quality } from './human';
 
+export type Pose = 'none' | 'sit' | 'sleep';
+
 export interface Character {
   root: THREE.Group;
   appearance: Appearance;
   setAppearance(a: Appearance): void;
   /** speedClass: 0 idle, 1 walk, 2 run; mps: actual ground speed (m/s) for stride matching. */
   animate(dt: number, speedClass: number, mps?: number): void;
+  /** Blend into / out of a full-body pose (sitting on furniture, lying on a bed). */
+  setPose?(pose: Pose): void;
+  /** Height of the hip joint above the feet (metres) — used to seat the character on furniture. */
+  hipHeight?: number;
   dispose?(): void;
 }
 

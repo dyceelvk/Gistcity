@@ -3,6 +3,7 @@
  * Saved to localStorage immediately and mirrored to Supabase when signed in.
  */
 import { Appearance, DEFAULT_APPEARANCE, sanitizeAppearance } from './appearance';
+import { defaultNeeds, sanitizeNeeds, type Needs } from './needs';
 
 export interface Stats {
   popularity: number;
@@ -13,8 +14,12 @@ export interface Stats {
 
 export interface PlayerState {
   name: string;
+  /** Unique account handle (set by the server at registration; empty in offline practice). */
+  username: string;
   appearance: Appearance;
+  /** G balance. Online this mirrors the server wallet; offline it is the practice balance. */
   cash: number;
+  needs: Needs;
   inventory: string[];
   /** Furniture ids currently placed in the apartment. */
   apartment: string[];
@@ -33,16 +38,24 @@ export const ACHIEVEMENTS: Record<string, { title: string; desc: string }> = {
   'homeowner': { title: 'Soft Life Loading', desc: 'Furnished your apartment.' },
   'socialite': { title: 'Socialite', desc: 'Gisted with ten people.' },
   'explorer': { title: 'Area Boss', desc: 'Visited every hangout spot.' },
-  'big-boy': { title: 'Odogwu', desc: 'Held ₦50,000 at once.' },
+  'big-boy': { title: 'Odogwu', desc: 'Held 50,000 G at once.' },
+  'well-fed': { title: 'Belle Full', desc: 'Ate and drank in the city.' },
+  'rested': { title: 'Soft Life', desc: 'Slept a full night in your own flat.' },
 };
 
 const KEY = 'gist_save_v1';
+/** Starter grant for a new citizen (the server's economy_config.starter_grant mirrors this). */
+export const START_G = 10000;
+/** Currency formatting: GistCity's currency is G. */
+export const fmtG = (n: number) => Math.round(n).toLocaleString('en-NG') + ' G';
 
 export function defaultState(): PlayerState {
   return {
     name: 'New GistCitizen',
+    username: '',
     appearance: { ...DEFAULT_APPEARANCE },
-    cash: 5000,
+    cash: START_G,
+    needs: defaultNeeds(),
     inventory: [],
     apartment: [],
     stats: { popularity: 0, reputation: 0, hustle: 0, xp: 0 },
@@ -60,9 +73,11 @@ export function sanitizeState(raw: unknown): PlayerState {
   const strs = (v: unknown) => (Array.isArray(v) ? v.filter((x) => typeof x === 'string').slice(0, 200) : []);
   const s = r.stats && typeof r.stats === 'object' ? r.stats : {};
   return {
-    name: typeof r.name === 'string' && r.name.trim() ? r.name.trim().slice(0, 22) : d.name,
+    name: typeof r.name === 'string' && r.name.trim() ? r.name.trim().slice(0, 24) : d.name,
+    username: typeof r.username === 'string' ? r.username.slice(0, 20) : '',
     appearance: sanitizeAppearance(r.appearance),
-    cash: num(r.cash, d.cash),
+    cash: num(r.cash, d.cash, Number.MAX_SAFE_INTEGER),
+    needs: sanitizeNeeds(r.needs),
     inventory: strs(r.inventory),
     apartment: strs(r.apartment),
     stats: {

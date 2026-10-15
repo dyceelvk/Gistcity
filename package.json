@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "GIST — a 3D Nigerian life simulation game. Powered by Crushly.",
+  "description": "GISTCITY — a persistent multiplayer 3D Nigerian life-simulation world. Powered by Riel Inc.",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",

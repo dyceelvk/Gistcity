@@ -1,11 +1,20 @@
-# GIST — Your City. Your Style. Your Story.
+# GISTCITY — Your City. Your Style. Your Story.
 
-A 3D Nigerian life-simulation game. Create a GistCitizen, dress them your way,
-walk a Nigerian-inspired city, hustle for Gist Cash, buy fits, furnish your flat
-at Gist Heights, gist with people — and see other players in the city.
-**Powered by Crushly.**
+A persistent, multiplayer 3D Nigerian life-simulation world in the browser.
+Register as a citizen, create the character everyone else will see, walk a
+Nigerian-inspired city, hustle for **G** (the city's currency), eat, drink,
+rest in your flat, buy fits, sit on a bench and gist with real people.
+**Powered by Riel Inc.**
 
-GIST is *not* GTA: no weapons, no crime loop. It is a lifestyle and social game.
+> **Status:** Phases 1–2 of the GISTCITY plan (foundation, accounts, character
+> creation, persistence, server-authorised economy, needs, furniture use,
+> contextual interactions) are implemented and tested. Later phases (social
+> graph & messaging, vehicles, education, government, businesses, property,
+> family, church) are **not built yet** — see `docs/AUDIT.md` for the audit,
+> what works, what is incomplete and the phase-by-phase plan.
+
+GISTCITY is *not* GTA: no weapons, no crime loop. It is a lifestyle and social
+world with its own identity.
 
 **▶ Play it now:** https://dyceelvk.github.io/Gistcity/ — open on your Android phone and choose
 *Add to Home screen* to install it like an app. (This is the preview link; production
@@ -65,33 +74,86 @@ wardrobe, apartment and progress are saved in the browser (`localStorage`).
   **GIST Fits** (clothing store), **Gist Heights** (your flat — enterable interior),
   **Suya Spot**, **Mama Nkechi Kitchen**, **Vibe Lounge**, **The Pitch**
   (penalty-shootout minigame), **Hustle Hub**, **QuickCash POS**, market stalls.
-- **Economy** — Gist Cash; hustles (dispatch runs, market runs, POS shifts with a
-  timing minigame); store purchases unlock styles; furniture appears in your flat.
+- **Accounts** — email + password registration with a unique username, display
+  name, confirm-password, Terms / Privacy / age (16+) acceptance, email
+  verification, sign in / sign out, password reset, change password and
+  persistent sessions. Character creation is mandatory on first sign-in; the
+  saved look is what other players see.
+- **Economy in G** — server-authorised, atomic, idempotent ledger (see below).
+  Hustles (dispatch runs, market runs, POS shifts with a timing minigame, penalty
+  shootout side bets) pay from the city **payroll** account; store purchases are
+  debited once and recorded in your inventory; food, drinks and lounge entry are
+  consumables with effects; gifts to other citizens and donations are transfers.
+- **Needs** — hunger, thirst and energy (0–100) fall slowly in real time (and a
+  capped amount while you are away). Low needs show an indicator and slow you
+  down a little; nothing can kill a character. Eat at Suya Spot / Mama Nkechi
+  Kitchen, drink, and sleep in your flat (a mattress is always there; the Queen
+  Bed from the store replaces it).
+- **Contextual actions** — walk up to anything and a menu shows only what you can
+  actually do there: sit on benches / sofa / dining chairs, sleep in bed, order
+  from a menu, start a shift, greet / view profile / send G to a real player,
+  gist with NPCs. Keyboard `E` or `1–6`, or tap on mobile.
 - **Life stats** — level/XP, popularity, reputation, hustle, achievements.
 - **NPCs** who walk the streets and gist with you in Pidgin.
-- **Online** (when Supabase is configured) — anonymous or email sign-in, cloud
-  save, live leaderboard, and other players rendered live in the city via
-  Realtime presence/broadcast.
+- **Multiplayer** (with Supabase) — other citizens rendered live in the city via
+  Realtime presence/broadcast (position, animation and sitting pose), waves,
+  public profiles, live leaderboard.
+- **Practice mode** — without a backend the game runs offline on this device
+  with the same rules, clearly labelled *Practice mode · offline*.
 
-## Connect Supabase (cloud saves, leaderboard, multiplayer presence)
+## Connect Supabase (accounts, economy, multiplayer)
 
-1. Apply the migration `supabase/migrations/20261014000001_gist.sql` to your
-   Supabase project — copy it into Crushly's `supabase/migrations/` folder (the
-   `db-migrations.yml` workflow pushes it) or paste it into the SQL editor. It
-   creates `gist_players` (RLS: each user only reads/writes their own row) and
-   the public `gist_leaderboard` view.
-2. **Authentication → Providers → Anonymous sign-ins → enable** so progress syncs
-   before the player gives an email. (Optional but recommended. Email magic
-   links work either way; the Account panel lets a guest attach an email.)
+1. Apply the migrations in `supabase/migrations/` **in order** to your Supabase
+   project (paste into the SQL editor, or copy them into Crushly's
+   `supabase/migrations/` folder so its `db-migrations.yml` workflow pushes them):
+   - `20261014000001_gist.sql` — `gist_players` (saved game state, own-row RLS).
+   - `20261015000002_gistcity_foundation.sql` — `economy_config`, `accounts`,
+     `transactions` (the ledger), `profiles` (+ trigger that creates the profile
+     and wallet on sign-up), `catalog_items`, `inventory`, `hustles`,
+     `hustle_log`, the `public_profiles` and `gist_leaderboard` views and the
+     RPCs the client calls: `username_available`, `me`, `my_wallet`,
+     `purchase_item`, `complete_hustle`, `transfer_g`, `donate_g`,
+     `economy_audit`.
+2. **Authentication → Providers → Email**: keep *Confirm email* on. Disable
+   anonymous sign-ins (the game no longer uses them). Set the Site URL / redirect
+   URLs to where the game is hosted so verification and password-reset links
+   land back in the game.
 3. Put the public values in `.env` locally (copy `.env.example`) and in the GitHub
    secrets `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` for the workflows.
 
-Realtime uses channel `gist:city` (presence + `pos` broadcasts, ~8/s per player).
-Nothing is persisted for it, so no extra tables.
+### How the G economy works
 
-> Prototype note: the economy is client-authoritative (the client writes its own
-> cash). Before any real creator rewards, move the money-changing actions to
-> Postgres RPCs / Edge Functions so rewards are granted server-side.
+- Currency: **G**. The one-time initial allocation is **5,000,000,000,000 G**
+  (`economy_config.total_supply`), minted once into the **Treasury** account and
+  split by ledger transactions into **Payroll** (wages for hustles and, later,
+  government jobs), **Development**, **Community** and **Starter pool**. These
+  are institutional accounts — no player ever receives the supply. The split is
+  documented in `economy_config.allocation` and can be changed by an admin with
+  a new migration.
+- Every new citizen receives a **10,000 G** starter grant from the starter pool.
+- Every money movement is a row in `transactions` (source, destination, amount,
+  reason, status, idempotency key, timestamp) written by the
+  `post_transaction` function inside the database. Clients can only call the
+  `SECURITY DEFINER` RPCs with a client-generated UUID idempotency key: a retry
+  with the same key returns the original result (`replay: true`) and never
+  charges twice. Balances can never go negative (check constraint + row locks).
+- Prices come from `catalog_items`, pay from `hustles` — never from the client.
+  `gist_players.cash` is only a mirror for the leaderboard.
+- `select public.economy_audit()` verifies that the sum of all balances equals
+  the supply and that no balance is negative.
+
+### Database tests
+
+`supabase/tests/run_local.sh` creates a throw-away database, applies every
+migration twice (idempotency) and runs `supabase/tests/economy_test.sql` —
+behavioural assertions for sign-up (profile + wallet + grant), RLS (players
+cannot change roles, balances or other people's rows), purchases, replayed
+purchases, insufficient funds, consumables, merchant credits, transfers,
+donations, hustle pay and cooldowns, and the ledger audit. It runs in CI on
+every change under `supabase/` (`.github/workflows/db-tests.yml`).
+
+Realtime uses channel `gist:city` (presence + `pos`/`wave` broadcasts, ~8/s per
+player). Nothing is persisted for it, so no extra tables.
 
 ## Deploy the web build — Cloudflare Pages
 
@@ -138,19 +200,30 @@ src/game/world.ts       Gist City generator (buildings, props, zones, NPC paths)
 src/game/interior.ts    your flat + furniture
 src/game/game.ts        controller, interactions, jobs, apartment, sync, loop
 src/game/jobs.ts        hustles · src/game/npc.ts pedestrians · src/game/camera.ts orbit cam
-src/net/supabase.ts     auth, cloud save, leaderboard, realtime presence, host bridge
-src/ui/hud.ts           HUD, Style Studio, Store, Your Space, Jobs, Life, Rankings, Map
-supabase/migrations/    database schema for the game
+src/game/needs.ts       hunger / thirst / energy model · src/game/catalog.ts consumables
+src/net/supabase.ts     auth, profile, economy RPC wrappers, cloud save, realtime presence, host bridge
+src/net/economy.ts      the only place the game spends or earns G (server RPCs / offline practice)
+src/ui/auth.ts          sign in · create account · verify · forgot / reset password
+src/ui/hud.ts           HUD, action menu, needs, Style Studio, Store, Your Space, Jobs, Life, Rankings, Map, Account
+supabase/migrations/    database schema (apply in order) · supabase/tests/ SQL test-suite
+docs/AUDIT.md           architecture audit, feature status and the phase plan
 ```
 
-## Roadmap (next)
+## Roadmap
 
-1. More baked wardrobe (jewellery sets, bags, sunglasses variants), emotes and
-   facial expressions on the MakeHuman rig.
-2. Server-authoritative economy (RPCs), daily hustles, Community Gist Challenges
-   (scenario votes) and creator bonuses with eligibility checks.
-3. Visiting friends' flats, chat bubbles between real players, more districts
-   (Island / Mainland), day–night cycle.
+The GISTCITY plan is built in tested phases (details in `docs/AUDIT.md`):
+
+1. ✅ Foundation — accounts, character creation, movement, interactions, needs
+2. ✅ Persistence & economy — ledger in G, server-authorised purchases/pay, saves
+3. ⏳ Social — friends, DMs with RLS, posts, blocks/reports, rate limits
+4. ⏳ Vehicles & dealership
+5. ⏳ Education & employment (certificates, government 10-step hiring, payroll)
+6. ⏳ Businesses & property
+7. ⏳ Family (consent-based marriage, family records, age progression)
+8. ⏳ Church (registration, seats, offerings, church accounts)
+9. ⏳ Polish — day/night, LOD/streaming, graphics settings, more districts
+
+Places that are planned but not built yet are listed on the map as **coming soon**.
 
 ## Credits
 
