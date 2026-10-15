@@ -629,6 +629,33 @@ async function main() {
   check('face scan exists in the Style Studio', scan.btn === true, '');
   check('face scan gives clear feedback without a camera', scan.toast.trim().length > 0, `toast="${scan.toast}"`);
 
+  /* -------------------------------------- map interaction */
+  const map = await page.evaluate(async () => {
+    const g = window.__gist;
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    g.hud.open('map');
+    await sleep(500);
+    const pins = (g.hud.mapPins ?? []).length;
+    const c = document.getElementById('bigmap');
+    const sheetShown = (() => {
+      const pin = (g.hud.mapPins ?? [])[0];
+      if (!pin) return false;
+      const r = c.getBoundingClientRect(), w = c.width, s = w / 170;
+      const cx = r.left + ((pin.x * s + w / 2) / w) * r.width;
+      const cy = r.top + ((pin.z * s + w / 2) / w) * r.height;
+      c.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: cx, clientY: cy }));
+      return !document.getElementById('mapSheet').classList.contains('hidden')
+        && document.getElementById('mapSheetName').textContent === pin.label;
+    })();
+    const goBtn = !!document.getElementById('mapGo');
+    document.getElementById('mapGo').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await sleep(300);
+    const tgt = g.jobTarget();
+    return { pins, sheetShown, goBtn, tgt: tgt ? tgt.label : null };
+  });
+  check('map screen opens with tappable places', map.pins > 5 && map.sheetShown, `pins=${map.pins}`);
+  check('tapping a place sets a waypoint on the minimap', map.tgt !== null, `waypoint="${map.tgt}"`);
+
   /* -------------------------------------- persistence & summary */
   const persist = await page.evaluate(async () => {
     const g = window.__gist;

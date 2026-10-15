@@ -335,3 +335,30 @@ Gradle assembly all pass on CI (run 38803654953, 1m59s).
   multiplayer need those two values, then any push rebuilds the APK with them baked in).
 - No `ANDROID_KEYSTORE_*` secrets: the APK is debug-signed — installable, but a later build
   cannot update over it without uninstalling first. Add a release keystore to fix.
+
+## 13. UI & graphics overhaul (this commit)
+
+The interface was rebuilt around **screen-to-screen navigation** and a premium visual
+system (user feedback: "UI should look expensive and cool… you can't tap map").
+
+**Implemented**
+- **Navigation** — floating glass dock (Map · Earn · Style · People · You) replaces the
+  wall of emoji buttons; every destination is a full-screen page with an app bar and a
+  back button; "You" and "People" carry in-page nav rows to Style, Garage, Family,
+  Business, Store, Your Space, Account, Messages, Rankings (screen → screen).
+- **Design system** (`src/ui/styles.css`, `index.html`) — deep glass surfaces, volt-lime
+  gradient accent, Space Grotesk + DM Sans bundled via @fontsource (offline in the APK),
+  ~40 inline SVG icons (no emoji in the chrome — emoji rendered as tofu boxes on some
+  devices), press micro-interactions, animated screen transitions, restyled action menu,
+  dialogues, drive HUD, minigame, DM chat, family/opportunity cards, loading screen.
+- **Tappable map** — the minimap is a button that opens the full City Map; the map draws
+  dark premium cartography with glowing pins; tapping a pin opens a place sheet and
+  **SET WAYPOINT** marks it on the minimap (`HudHost.setWaypoint` / `clearWaypoint`).
+- **3D pass** — sleek re-modeled cars (metallic paint, raked glass, light bars), natural
+  drooping palm fronds, layered tree crowns, refined architecture palette, cooler
+  asphalt, cinematic sky keyframes (clean dawn/dusk, no muddy blends), tuned sun/hemi/fog,
+  phone camera framing (more city above the character).
+
+**Tests** — `node scripts/game-smoke.mjs` **72/72** (two new checks: map pin tap opens
+the place sheet; SET WAYPOINT lands on `jobTarget()`); `node scripts/db-tests.mjs` all
+steps pass; `npm run build` clean (fonts bundled).

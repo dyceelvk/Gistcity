@@ -29,6 +29,7 @@ export class CameraRig {
   update(dt: number, target: THREE.Vector3, targetYaw: number, colliders: AABB[], indoor: boolean) {
     const focus = target.clone().add(new THREE.Vector3(0, 1.45, 0));
     let yaw = this.yaw, pitch = this.pitch, dist = this.dist;
+    if (!this.portrait && innerHeight > innerWidth) { focus.y += 0.65; dist = Math.min(dist + 1.2, this.maxDist); } // phone: frame like a mobile game
     if (this.portrait) {
       // in front of the player, slightly above eye line
       // camera sits where the avatar is looking, so we see the face

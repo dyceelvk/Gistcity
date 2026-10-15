@@ -157,16 +157,16 @@ export class Game implements HudHost, SocietyHost {
     this.rig = new CameraRig(this.camera);
 
     // lights
-    this.hemi = new THREE.HemisphereLight('#dff1ff', '#5c6b4e', 1.15);
+    this.hemi = new THREE.HemisphereLight('#cfe4f2', '#63685c', 1.05);
     this.scene.add(this.hemi);
-    this.sun = new THREE.DirectionalLight('#ffe2b8', 2.6);
+    this.sun = new THREE.DirectionalLight('#ffe9cc', 2.45);
     this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(touch ? 1024 : 2048, touch ? 1024 : 2048);
     const sc = this.sun.shadow.camera as THREE.OrthographicCamera;
     sc.left = -45; sc.right = 45; sc.top = 45; sc.bottom = -45; sc.near = 1; sc.far = 160;
     this.sun.shadow.bias = -0.0006; this.sun.shadow.normalBias = 0.03;
     this.scene.add(this.sun, this.sun.target);
-    this.scene.fog = new THREE.Fog('#e9dcc3', 70, 200);
+    this.scene.fog = new THREE.Fog('#ddd2bd', 80, 240);
     const pmrem = new THREE.PMREMGenerator(this.renderer);
     this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
     this.scene.environmentIntensity = 0.45;
@@ -317,7 +317,10 @@ export class Game implements HudHost, SocietyHost {
   }
   setPortrait(on: boolean) { this.rig.portrait = on; }
   player() { const p = this.avatar.root.position; return { x: p.x, z: p.z, yaw: this.yaw }; }
-  jobTarget() { return this.indoor ? null : this.jobs.target(); }
+  private mapWaypoint: { x: number; z: number; label: string } | null = null;
+  setWaypoint(x: number, z: number, label: string) { this.mapWaypoint = { x, z, label }; }
+  clearWaypoint() { this.mapWaypoint = null; }
+  jobTarget() { return this.indoor ? null : (this.jobs.target() ?? this.mapWaypoint); }
   activeJob(): JobId | null { return this.jobs.active?.id ?? null; }
   startJob(id: JobId) { if (this.indoor || this.seated || this.sleeping) return; this.jobs.start(id, this.avatar.root.position); }
   cancelJob() { this.jobs.cancel(); }
@@ -973,7 +976,7 @@ export class Game implements HudHost, SocietyHost {
     this.avatar.root.position.set(r.x, 0, r.z);
     this.yaw = r.yaw; this.avatar.root.rotation.y = this.yaw; this.rig.yaw = this.yaw;
     this.rig.snapTo(this.avatar.root.position);
-    this.scene.fog = new THREE.Fog('#e9dcc3', 70, 200);
+    this.scene.fog = new THREE.Fog('#ddd2bd', 80, 240);
     if (from === 'dealer' || from === 'church') void this.refreshVehicles();
     if (this.jobs.active) this.hud.objective('Hustle in progress', 'Follow the yellow marker.', true, '💼'); else this.defaultObjective();
   }

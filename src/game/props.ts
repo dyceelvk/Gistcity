@@ -92,22 +92,28 @@ export function signboard(parent: THREE.Object3D, text: string, w: number, h: nu
 export function palm(parent: THREE.Object3D, x: number, z: number, scale = 1, colliders?: AABB[]) {
   const g = new THREE.Group();
   g.position.set(x, 0, z); g.scale.setScalar(scale);
-  const trunkM = mat('#7a5a3a', 0.95);
+  const trunkM = mat('#87664a', 0.92);
   const segs = 5;
   for (let i = 0; i < segs; i++) {
-    const t = cyl(g, 0.14 - i * 0.012, 0.17 - i * 0.012, 1.0, trunkM, Math.sin(i * 0.5) * 0.08 * i, 0.5 + i, 0, 7);
+    const t = cyl(g, 0.13 - i * 0.011, 0.16 - i * 0.011, 1.0, trunkM, Math.sin(i * 0.5) * 0.08 * i, 0.5 + i, 0, 7);
     t.rotation.z = -0.05 * i;
   }
-  const topY = segs + 0.2, topX = Math.sin(segs * 0.5) * 0.08 * (segs - 1);
-  const leafM = mat('#3f8a4a', 0.9);
-  for (let i = 0; i < 8; i++) {
-    const leaf = box(g, 0.35, 0.06, 2.6, leafM, topX, topY, 0);
-    leaf.geometry.translate(0, 0, 1.2);
-    leaf.rotation.y = (i / 8) * Math.PI * 2;
-    leaf.rotation.x = -0.45 - (i % 2) * 0.2;
+  const topY = segs + 0.25, topX = Math.sin(segs * 0.5) * 0.08 * (segs - 1);
+  const leafA = mat('#2c6b3c', 0.92), leafB = mat('#357a42', 0.92);
+  // curved fronds: two segments each — lift then droop
+  for (let i = 0; i < 10; i++) {
+    const a = (i / 10) * Math.PI * 2 + 0.25;
+    const inner = box(g, 0.3, 0.05, 1.35, i % 2 ? leafA : leafB, topX, topY, 0);
+    inner.geometry = inner.geometry.clone(); inner.geometry.translate(0, 0, 0.62);
+    inner.rotation.y = a; inner.rotation.x = -0.38;
+    const outer = box(g, 0.22, 0.04, 1.25, i % 2 ? leafB : leafA, topX + Math.sin(a) * 1.16, topY + 0.46, Math.cos(a) * 1.16);
+    outer.geometry = outer.geometry.clone(); outer.geometry.translate(0, 0, 0.58);
+    outer.rotation.y = a; outer.rotation.x = 0.55;
   }
+  // crown tuft
+  const tuft = new THREE.Mesh(new THREE.SphereGeometry(0.32, 8, 6), leafA); tuft.position.set(topX, topY + 0.1, 0); g.add(tuft);
   const nutM = mat('#5c3d1f', 0.9);
-  for (let i = 0; i < 3; i++) { const n = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), nutM); n.position.set(topX + Math.sin(i) * 0.2, topY - 0.15, Math.cos(i) * 0.2); g.add(n); }
+  for (let i = 0; i < 3; i++) { const n = new THREE.Mesh(new THREE.SphereGeometry(0.11, 8, 6), nutM); n.position.set(topX + Math.sin(i) * 0.18, topY - 0.18, Math.cos(i) * 0.18); g.add(n); }
   parent.add(g);
   colliders?.push({ minX: x - 0.3, maxX: x + 0.3, minZ: z - 0.3, maxZ: z + 0.3, h: 1 });
   return g;
@@ -116,12 +122,13 @@ export function palm(parent: THREE.Object3D, x: number, z: number, scale = 1, co
 export function tree(parent: THREE.Object3D, x: number, z: number, scale = 1, colliders?: AABB[]) {
   const g = new THREE.Group();
   g.position.set(x, 0, z); g.scale.setScalar(scale);
-  cyl(g, 0.18, 0.26, 2.2, mat('#5b4330', 0.95), 0, 1.1, 0, 8);
-  const leafM = mat('#2f7a3e', 0.9);
-  const crown = new THREE.Mesh(new THREE.IcosahedronGeometry(1.7, 1), leafM);
-  crown.position.y = 3.1; crown.castShadow = true; g.add(crown);
-  const c2 = new THREE.Mesh(new THREE.IcosahedronGeometry(1.2, 1), mat('#3a8f4a', 0.9));
-  c2.position.set(0.8, 3.6, 0.4); c2.castShadow = true; g.add(c2);
+  cyl(g, 0.16, 0.24, 2.3, mat('#5b4330', 0.95), 0, 1.15, 0, 8);
+  const crown = new THREE.Mesh(new THREE.IcosahedronGeometry(1.45, 1), mat('#2c6b3c', 0.92));
+  crown.position.y = 3.15; crown.scale.y = 0.88; crown.castShadow = true; g.add(crown);
+  const c2 = new THREE.Mesh(new THREE.IcosahedronGeometry(1.05, 1), mat('#3a8248', 0.92));
+  c2.position.set(0.72, 3.55, 0.35); c2.scale.y = 0.85; c2.castShadow = true; g.add(c2);
+  const c3 = new THREE.Mesh(new THREE.IcosahedronGeometry(0.8, 1), mat('#2c6b3c', 0.92));
+  c3.position.set(-0.6, 3.5, -0.3); c3.castShadow = true; g.add(c3);
   parent.add(g);
   colliders?.push({ minX: x - 0.35, maxX: x + 0.35, minZ: z - 0.35, maxZ: z + 0.35, h: 1 });
   return g;
@@ -159,16 +166,42 @@ export function bench(parent: THREE.Object3D, x: number, z: number, rotY: number
 export function car(parent: THREE.Object3D, x: number, z: number, rotY: number, color: string, colliders?: AABB[]) {
   const g = new THREE.Group();
   g.position.set(x, 0, z); g.rotation.y = rotY;
-  const body = mat(color, 0.35, 0.5), glass = mat('#1f3238', 0.1, 0.6), tyre = mat('#111', 0.9), rim = mat('#c9c9c9', 0.3, 0.8);
-  box(g, 1.8, 0.55, 4.2, body, 0, 0.55, 0);
-  box(g, 1.6, 0.5, 2.2, body, 0, 1.05, -0.1);
-  box(g, 1.62, 0.36, 2.0, glass, 0, 1.08, -0.1);
-  for (const [wx, wz] of [[-0.85, 1.35], [0.85, 1.35], [-0.85, -1.35], [0.85, -1.35]]) {
-    const t = cyl(g, 0.32, 0.32, 0.25, tyre, wx, 0.32, wz, 12); t.rotation.z = Math.PI / 2;
-    const r = cyl(g, 0.18, 0.18, 0.27, rim, wx, 0.32, wz, 8); r.rotation.z = Math.PI / 2;
+  const paint = mat(color, 0.28, 0.62), dark = mat('#15181c', 0.5, 0.4), glass = mat('#141f28', 0.08, 0.75),
+    tyre = mat('#0d0e10', 0.85), rim = mat('#cdd2d6', 0.22, 0.9),
+    trim = mat('#0a0c0e', 0.55, 0.3);
+  const lightF = new THREE.MeshStandardMaterial({ color: '#eef2ff', emissive: '#cfe0ff', emissiveIntensity: 0.85, roughness: 0.25 });
+  const lightR = new THREE.MeshStandardMaterial({ color: '#ff2d3e', emissive: '#ff2233', emissiveIntensity: 0.9, roughness: 0.3 });
+
+  // lower body — long, low, slightly tapered
+  box(g, 1.86, 0.52, 4.45, paint, 0, 0.52, 0);
+  // hood + trunk slopes (thin wedges)
+  const hood = box(g, 1.78, 0.2, 1.25, paint, 0, 0.83, 1.55); hood.rotation.x = -0.1;
+  const trunk = box(g, 1.78, 0.2, 1.05, paint, 0, 0.84, -1.7); trunk.rotation.x = 0.12;
+  // cabin glasshouse — raked windscreen, blacked pillars
+  const cab = box(g, 1.62, 0.56, 2.35, glass, 0, 1.12, -0.18); cab.rotation.x = 0.02;
+  const roof = box(g, 1.5, 0.1, 1.7, paint, 0, 1.42, -0.35);
+  const wind = box(g, 1.55, 0.06, 0.95, glass, 0, 1.1, 1.05); wind.rotation.x = -0.62;
+  const rear = box(g, 1.55, 0.06, 0.8, glass, 0, 1.12, -1.42); rear.rotation.x = 0.55;
+  // rocker + bumper trims
+  box(g, 1.9, 0.14, 3.1, trim, 0, 0.3, 0);
+  box(g, 1.86, 0.22, 0.5, trim, 0, 0.48, 2.18);
+  box(g, 1.86, 0.22, 0.5, trim, 0, 0.48, -2.18);
+  // wheel arches
+  for (const [wx, wz] of [[-0.93, 1.32], [0.93, 1.32], [-0.93, -1.32], [0.93, -1.32]]) {
+    box(g, 0.12, 0.42, 1.05, trim, wx, 0.42, wz);
+    const t = cyl(g, 0.335, 0.335, 0.26, tyre, wx * 0.98, 0.335, wz, 14); t.rotation.z = Math.PI / 2;
+    const r = cyl(g, 0.2, 0.2, 0.28, rim, wx * 0.98, 0.335, wz, 10); r.rotation.z = Math.PI / 2;
+    const hub = cyl(g, 0.07, 0.07, 0.3, dark, wx * 0.98, 0.335, wz, 8); hub.rotation.z = Math.PI / 2;
   }
-  box(g, 0.3, 0.15, 0.05, mat('#fff4cf', 0.3), -0.6, 0.6, 2.1); box(g, 0.3, 0.15, 0.05, mat('#fff4cf', 0.3), 0.6, 0.6, 2.1);
-  box(g, 0.3, 0.12, 0.05, mat('#c0392b', 0.3), -0.6, 0.6, -2.1); box(g, 0.3, 0.12, 0.05, mat('#c0392b', 0.3), 0.6, 0.6, -2.1);
+  // lights — slim modern bars
+  for (const lx of [-0.58, 0.58]) {
+    box(g, 0.52, 0.11, 0.06, lightF, lx, 0.72, 2.235);
+    box(g, 0.55, 0.1, 0.06, lightR, lx, 0.74, -2.235);
+  }
+  // grille + mirrors + door seam
+  box(g, 1.2, 0.16, 0.05, trim, 0, 0.55, 2.24);
+  for (const mx of [-1.02, 1.02]) box(g, 0.22, 0.1, 0.14, trim, mx, 1.05, 0.72);
+  box(g, 0.03, 0.5, 1.7, trim, 0, 0.72, -0.25);
   parent.add(g);
   const cs = Math.abs(Math.cos(rotY)), sn = Math.abs(Math.sin(rotY));
   const hw = 0.9 * cs + 2.1 * sn, hd = 0.9 * sn + 2.1 * cs;
@@ -180,7 +213,7 @@ export function car(parent: THREE.Object3D, x: number, z: number, rotY: number, 
 export function danfo(parent: THREE.Object3D, x: number, z: number, rotY: number, colliders?: AABB[]) {
   const g = new THREE.Group();
   g.position.set(x, 0, z); g.rotation.y = rotY;
-  const yellow = mat('#f2c01d', 0.5), black = mat('#141414', 0.7), glass = mat('#243a3f', 0.1, 0.5), tyre = mat('#111', 0.9);
+  const yellow = mat('#f2c01d', 0.38, 0.45), black = mat('#141414', 0.55, 0.3), glass = mat('#152229', 0.1, 0.7), tyre = mat('#0d0e10', 0.85);
   box(g, 2.0, 1.9, 4.8, yellow, 0, 1.35, 0);
   box(g, 2.04, 0.2, 4.84, black, 0, 1.2, 0); // the black stripe
   box(g, 2.04, 0.6, 1.2, glass, 0, 1.7, 1.6);

@@ -43,11 +43,14 @@ export interface HudHost {
   myAge(): number;
   /** Look at the player once and match their skin tone to the character. */
   scanFace(): void;
+  /** Pin a destination on the city map (shown on the minimap like a hustle target). */
+  setWaypoint(x: number, z: number, label: string): void;
+  clearWaypoint(): void;
 }
 export interface PanelRenderer { render(id: string): void; stopTimers(): void }
 
 /** Places on the map that exist in the plan but are not built yet — shown honestly as coming soon. */
-export const COMING_SOON = ['🏦 Bank', '🏪 Businesses & property', '🏘️ Housing market'];
+export const COMING_SOON = ['Bank', 'Businesses & property', 'Housing market'];
 
 const $ = <T extends HTMLElement = HTMLElement>(sel: string) => document.querySelector(sel) as T;
 const $$ = <T extends HTMLElement = HTMLElement>(sel: string) => Array.from(document.querySelectorAll(sel)) as T[];
@@ -102,6 +105,7 @@ export class Hud {
     nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') nameInput.blur(); });
     this.renderStatus(cloud.status);
     this.buildStyleControls();
+    this.bindMap();
   }
   cloudStatus(st: CloudStatus) { this.renderStatus(st); }
 
@@ -125,7 +129,7 @@ export class Hud {
     if (id === 'jobs') this.renderJobs();
     if (id === 'life') this.renderLife(this.host.store.state);
     if (id === 'rank') void this.renderRank();
-    if (id === 'map') this.drawBigMap();
+    if (id === 'map') { this.collectPins(); this.mapSel = null; $('#mapSheet').classList.add('hidden'); this.drawBigMap(); }
     if (id === 'account') this.renderAccount();
     this.panels?.render(id);
     this.social?.render(id);
@@ -308,7 +312,7 @@ export class Hud {
     const dot = $('#statusDot'), txt = $('#statusText');
     dot.className = 'dot';
     const map: Record<CloudStatus, [string, string]> = {
-      offline: ['', 'Practice · offline'], connecting: ['warn', 'Connecting'], guest: ['warn', 'Signed out'],
+      offline: ['', 'Practice'], connecting: ['warn', 'Connecting'], guest: ['warn', 'Guest'],
       'signed-in': ['ok', this.host.store.state.username ? '@' + this.host.store.state.username : (cloud.email || 'Online')], error: ['bad', 'Config error'],
     };
     const [cls, label] = map[st];
@@ -588,6 +592,52 @@ export class Hud {
 
   /* ----------------------------------------------------------------- maps */
 
+  private mapPins: { x: number; z: number; label: string; id: string }[] = [];
+  private mapSel: { x: number; z: number; label: string; id: string } | null = null;
+
+  /** Unique, tappable places for the big map. */
+  private collectPins() {
+    const seen = new Set<string>();
+    this.mapPins = this.host.world.zones
+      .filter((z) => z.id !== 'seat' && z.label && !seen.has(z.label) && !!seen.add(z.label))
+      .map((z) => ({ x: z.x, z: z.z, label: z.label, id: z.id }));
+  }
+
+  /** Screen-to-screen map: tap a pin → place sheet → waypoint. */
+  private bindMap() {
+    $('#minimapBtn').addEventListener('click', () => this.open('map'));
+    this.big.addEventListener('click', (e) => {
+      const r = this.big.getBoundingClientRect();
+      const w = this.big.width, s = w / 170;
+      const px = ((e.clientX - r.left) / r.width) * w - w / 2;
+      const pz = ((e.clientY - r.top) / r.height) * w - w / 2;
+      let best: { x: number; z: number; label: string; id: string } | null = null, bd = 26 * 26;
+      for (const p of this.mapPins) {
+        const dx = p.x * s - px, dz = p.z * s - pz, d = dx * dx + dz * dz;
+        if (d < bd) { bd = d; best = p; }
+      }
+      this.mapSel = best;
+      const sheet = $('#mapSheet');
+      if (best) {
+        sheet.classList.remove('hidden');
+        $('#mapSheetName').textContent = best.label;
+        $('#mapSheetText').textContent = `Set a waypoint and the gold marker will guide you across the city.`;
+      } else sheet.classList.add('hidden');
+      this.drawBigMap();
+    });
+    $('#mapGo').addEventListener('click', () => {
+      if (!this.mapSel) return;
+      this.host.setWaypoint(this.mapSel.x, this.mapSel.z, this.mapSel.label);
+      this.toast(`Waypoint set — head for ${this.mapSel.label}`);
+      this.closeAll();
+    });
+    $('#mapClear').addEventListener('click', () => {
+      this.host.clearWaypoint();
+      this.mapSel = null; $('#mapSheet').classList.add('hidden'); this.drawBigMap();
+      this.toast('Waypoint cleared');
+    });
+  }
+
   drawMinimap() {
     const c = this.mini, g = c.getContext('2d'); if (!g) return;
     const w = c.width, h = c.height, p = this.host.player();
@@ -595,60 +645,104 @@ export class Hud {
     g.clearRect(0, 0, w, h);
     g.save();
     g.beginPath(); g.arc(w / 2, h / 2, w / 2 - 2, 0, Math.PI * 2); g.clip();
-    g.fillStyle = '#1b2a1f'; g.fillRect(0, 0, w, h);
+    g.fillStyle = '#0d1411'; g.fillRect(0, 0, w, h);
     if (this.host.isIndoor()) {
-      // simple floor plan of the flat
       const rs = w / 16;
       g.translate(w / 2 - p.x * rs, h / 2 - p.z * rs);
-      g.fillStyle = '#d9d2c3'; g.fillRect(-5.5 * rs, -4.5 * rs, 11 * rs, 9 * rs);
-      g.strokeStyle = '#6b4a2b'; g.lineWidth = 3; g.strokeRect(-5.5 * rs, -4.5 * rs, 11 * rs, 9 * rs);
-      g.font = '12px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
-      g.fillText('🚪', 0, 4.3 * rs); g.fillText('👗', -4.4 * rs, -3.2 * rs); g.fillText('🛋️', 0.5 * rs, -1.2 * rs); g.fillText('🛏️', -2.0 * rs, -3.3 * rs);
+      g.fillStyle = '#c9c2b2'; g.fillRect(-5.5 * rs, -4.5 * rs, 11 * rs, 9 * rs);
+      g.strokeStyle = '#8a6a44'; g.lineWidth = 3; g.strokeRect(-5.5 * rs, -4.5 * rs, 11 * rs, 9 * rs);
+      g.fillStyle = '#5c645c'; g.font = `bold ${rs * 1.1}px sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText('D', 0, 4.3 * rs); g.fillText('C', -4.4 * rs, -3.2 * rs); g.fillText('L', 0.5 * rs, -1.2 * rs); g.fillText('B', -2.0 * rs, -3.3 * rs);
       g.restore();
       g.save(); g.translate(w / 2, h / 2); g.rotate(Math.PI - p.yaw);
-      g.fillStyle = '#a5ff38'; g.beginPath(); g.moveTo(0, -7); g.lineTo(5, 6); g.lineTo(0, 3); g.lineTo(-5, 6); g.closePath(); g.fill(); g.restore();
+      g.fillStyle = '#c2ff4e'; g.beginPath(); g.moveTo(0, -7); g.lineTo(5, 6); g.lineTo(0, 3); g.lineTo(-5, 6); g.closePath(); g.fill(); g.restore();
       return;
     }
     g.translate(w / 2 - p.x * s, h / 2 - p.z * s);
     this.paintCity(g, s, false);
     const tgt = this.host.jobTarget();
-    if (tgt) { g.fillStyle = '#f5c242'; g.beginPath(); g.arc(tgt.x * s, tgt.z * s, 4, 0, Math.PI * 2); g.fill(); }
-    for (const r of this.host.remotes()) { g.fillStyle = '#5ad1ff'; g.beginPath(); g.arc(r.x * s, r.z * s, 3, 0, Math.PI * 2); g.fill(); }
+    if (tgt) {
+      g.fillStyle = '#ecc873'; g.shadowColor = '#ecc873'; g.shadowBlur = 8;
+      g.beginPath(); g.arc(tgt.x * s, tgt.z * s, 4.5, 0, Math.PI * 2); g.fill(); g.shadowBlur = 0;
+    }
+    for (const r of this.host.remotes()) { g.fillStyle = '#7fd4ff'; g.beginPath(); g.arc(r.x * s, r.z * s, 3, 0, Math.PI * 2); g.fill(); }
     g.restore();
-    // player arrow (north-up map; yaw 0 faces +z which is "down")
     g.save(); g.translate(w / 2, h / 2); g.rotate(Math.PI - p.yaw);
-    g.fillStyle = '#a5ff38'; g.beginPath(); g.moveTo(0, -7); g.lineTo(5, 6); g.lineTo(0, 3); g.lineTo(-5, 6); g.closePath(); g.fill(); g.restore();
-    if (tgt) { // edge arrow towards the target when it's off-map
+    g.fillStyle = '#c2ff4e'; g.beginPath(); g.moveTo(0, -7); g.lineTo(5, 6); g.lineTo(0, 3); g.lineTo(-5, 6); g.closePath(); g.fill(); g.restore();
+    if (tgt) {
       const dx = tgt.x - p.x, dz = tgt.z - p.z, d = Math.hypot(dx, dz);
-      if (d * s > w / 2 - 10) { const a = Math.atan2(dz, dx); g.save(); g.translate(w / 2 + Math.cos(a) * (w / 2 - 10), h / 2 + Math.sin(a) * (h / 2 - 10)); g.rotate(a); g.fillStyle = '#f5c242'; g.beginPath(); g.moveTo(6, 0); g.lineTo(-4, -5); g.lineTo(-4, 5); g.closePath(); g.fill(); g.restore(); }
+      if (d * s > w / 2 - 10) { const a = Math.atan2(dz, dx); g.save(); g.translate(w / 2 + Math.cos(a) * (w / 2 - 10), h / 2 + Math.sin(a) * (w / 2 - 10)); g.rotate(a); g.fillStyle = '#ecc873'; g.beginPath(); g.moveTo(6, 0); g.lineTo(-4, -5); g.lineTo(-4, 5); g.closePath(); g.fill(); g.restore(); }
     }
   }
+
   drawBigMap() {
     const c = this.big, g = c.getContext('2d'); if (!g) return;
     const w = c.width, p = this.host.player();
     const s = w / 170;
-    g.fillStyle = '#1b2a1f'; g.fillRect(0, 0, w, w);
+    const bg = g.createLinearGradient(0, 0, w, w);
+    bg.addColorStop(0, '#0c120e'); bg.addColorStop(1, '#0a100c');
+    g.fillStyle = bg; g.fillRect(0, 0, w, w);
     g.save(); g.translate(w / 2, w / 2);
     this.paintCity(g, s, true);
+    // tappable pins
+    for (const pin of this.mapPins) {
+      const x = pin.x * s, y = pin.z * s;
+      const sel = this.mapSel && this.mapSel.id === pin.id;
+      g.beginPath(); g.arc(x, y, sel ? 13 : 9, 0, Math.PI * 2);
+      g.fillStyle = sel ? '#c2ff4e' : 'rgba(194,255,78,0.22)';
+      g.shadowColor = '#c2ff4e'; g.shadowBlur = sel ? 22 : 10; g.fill(); g.shadowBlur = 0;
+      g.lineWidth = 2; g.strokeStyle = sel ? '#0c120e' : 'rgba(194,255,78,0.85)'; g.stroke();
+      if (sel) {
+        g.fillStyle = '#f3f6f1'; g.font = 'bold 13px sans-serif'; g.textAlign = 'center';
+        g.fillText(pin.label, x, y - 20); g.textAlign = 'left';
+      }
+    }
     const tgt = this.host.jobTarget();
-    if (tgt) { g.fillStyle = '#f5c242'; g.beginPath(); g.arc(tgt.x * s, tgt.z * s, 7, 0, Math.PI * 2); g.fill(); g.fillStyle = '#fff'; g.font = 'bold 12px sans-serif'; g.fillText(tgt.label, tgt.x * s + 10, tgt.z * s + 4); }
-    for (const r of this.host.remotes()) { g.fillStyle = '#5ad1ff'; g.beginPath(); g.arc(r.x * s, r.z * s, 5, 0, Math.PI * 2); g.fill(); g.fillStyle = '#cfefff'; g.font = '11px sans-serif'; g.fillText(r.name, r.x * s + 8, r.z * s + 4); }
-    g.save(); g.translate(p.x * s, p.z * s); g.rotate(Math.PI - p.yaw); g.fillStyle = '#a5ff38'; g.beginPath(); g.moveTo(0, -10); g.lineTo(7, 8); g.lineTo(0, 4); g.lineTo(-7, 8); g.closePath(); g.fill(); g.restore();
+    if (tgt) {
+      g.fillStyle = '#ecc873'; g.shadowColor = '#ecc873'; g.shadowBlur = 16;
+      g.beginPath(); g.arc(tgt.x * s, tgt.z * s, 8, 0, Math.PI * 2); g.fill(); g.shadowBlur = 0;
+      g.fillStyle = '#f3f6f1'; g.font = 'bold 12px sans-serif'; g.fillText(tgt.label, tgt.x * s + 12, tgt.z * s + 4);
+    }
+    for (const r of this.host.remotes()) {
+      g.fillStyle = '#7fd4ff'; g.beginPath(); g.arc(r.x * s, r.z * s, 5, 0, Math.PI * 2); g.fill();
+      g.fillStyle = '#cfefff'; g.font = '11px sans-serif'; g.fillText(r.name, r.x * s + 9, r.z * s + 4);
+    }
+    g.save(); g.translate(p.x * s, p.z * s); g.rotate(Math.PI - p.yaw);
+    g.fillStyle = '#c2ff4e'; g.shadowColor = '#c2ff4e'; g.shadowBlur = 14;
+    g.beginPath(); g.moveTo(0, -10); g.lineTo(7, 8); g.lineTo(0, 4); g.lineTo(-7, 8); g.closePath(); g.fill(); g.shadowBlur = 0; g.restore();
     g.restore();
-    const seen = new Set<string>();
-    const places = this.host.world.zones.filter((z) => z.id !== 'seat' && !seen.has(z.label) && seen.add(z.label));
-    $('#mapLegend').innerHTML = places.map((z) => `<span>${z.icon} ${esc(z.label)}</span>`).join('') + `<span>🪑 Benches</span><span>🟢 you</span><span>🟡 hustle target</span><span>🔵 other players</span>` + COMING_SOON.map((c) => `<span class="soon">${c} · coming soon</span>`).join('');
+    const places = this.mapPins;
+    $('#mapLegend').innerHTML = places.map((z) => `<span><i class="dotLime"></i>${esc(z.label)}</span>`).join('')
+      + `<span><i class="dotGold"></i>your target</span><span><i class="dotBlue"></i>citizens</span><span><i class="dotWhite"></i>you</span>`
+      + COMING_SOON.map((cName) => `<span class="soon">${esc(cName)} · coming soon</span>`).join('');
   }
+
+  /** Shared painter for both maps: dark premium cartography. */
   private paintCity(g: CanvasRenderingContext2D, s: number, labels: boolean) {
     const world = this.host.world;
-    g.fillStyle = '#3a4a3c';
+    g.fillStyle = '#202824';
     for (const r of world.roads) g.fillRect((r.x - r.w / 2) * s, (r.z - r.d / 2) * s, r.w * s, r.d * s);
-    g.fillStyle = '#6f9d5a'; g.beginPath(); g.arc(0, 0, 7 * s, 0, Math.PI * 2); g.fill();
-    for (const l of world.landmarks) { g.fillStyle = l.color; g.globalAlpha = 0.85; g.fillRect((l.x - l.w / 2) * s, (l.z - l.d / 2) * s, l.w * s, l.d * s); }
-    g.globalAlpha = 1;
-    if (labels) { g.fillStyle = '#0b0e0c'; g.font = `bold ${Math.max(9, 3 * s)}px sans-serif`; g.textAlign = 'center'; for (const l of world.landmarks) if (l.label) g.fillText(l.label, l.x * s, l.z * s + 3); g.textAlign = 'left'; }
-    g.font = `${labels ? 16 : 11}px sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
-    for (const z of world.zones) { if (z.id === 'seat' && !labels) continue; g.fillStyle = '#0b0e0ccc'; g.beginPath(); g.arc(z.x * s, z.z * s, labels ? (z.id === 'seat' ? 8 : 12) : 7, 0, Math.PI * 2); g.fill(); g.fillText(z.icon, z.x * s, z.z * s + 1); }
-    g.textAlign = 'left'; g.textBaseline = 'alphabetic';
+    // road centre sheen
+    g.fillStyle = 'rgba(255,255,255,0.045)';
+    for (const r of world.roads) {
+      if (r.w > r.d) g.fillRect((r.x - r.w / 2) * s, r.z * s - 1.2, r.w * s, 2.4);
+      else g.fillRect(r.x * s - 1.2, (r.z - r.d / 2) * s, 2.4, r.d * s);
+    }
+    g.fillStyle = '#2c3a31'; g.beginPath(); g.arc(0, 0, 7 * s, 0, Math.PI * 2); g.fill();
+    for (const l of world.landmarks) {
+      g.fillStyle = l.color; g.globalAlpha = 0.5;
+      g.fillRect((l.x - l.w / 2) * s, (l.z - l.d / 2) * s, l.w * s, l.d * s);
+      g.globalAlpha = 0.24; g.fillStyle = '#000';
+      g.fillRect((l.x - l.w / 2) * s, (l.z - l.d / 2) * s, l.w * s, l.d * s);
+      g.globalAlpha = 1;
+    }
+    if (labels) {
+      g.fillStyle = 'rgba(243,246,241,0.6)'; g.font = `bold ${Math.max(9, 2.6 * s)}px sans-serif`; g.textAlign = 'center';
+      for (const l of world.landmarks) if (l.label) g.fillText(l.label, l.x * s, l.z * s + 3);
+      g.textAlign = 'left';
+    }
+    // green pockets
+    g.fillStyle = 'rgba(126, 196, 110, 0.16)';
+    for (const z of world.zones) if (z.id === 'park') { g.beginPath(); g.arc(z.x * s, z.z * s, 7 * s, 0, Math.PI * 2); g.fill(); }
   }
 }

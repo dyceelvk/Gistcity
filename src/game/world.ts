@@ -53,7 +53,7 @@ export interface World {
   bounds: number;
 }
 
-const PALETTE = ['#e8d9b5', '#f0c9a0', '#d98c5f', '#9fc5c8', '#cfe3c4', '#e4c067', '#f2efe6', '#c47c6a', '#b9d5e8', '#d6b58a'];
+const PALETTE = ['#e8e0d2', '#d9c7ad', '#c98a6b', '#93aeb2', '#b7c2ab', '#ddc78f', '#f2efe8', '#b07a68', '#a9bcc9', '#cbb79c'];
 
 type Facing = 'n' | 's' | 'e' | 'w';
 const facingRot: Record<Facing, number> = { s: 0, e: Math.PI / 2, n: Math.PI, w: -Math.PI / 2 };
@@ -85,15 +85,15 @@ export function building(parent: THREE.Object3D, colliders: AABB[], landmarks: L
   parent.add(g);
 
   const wallM = mat(color, 0.92);
-  const trimM = mat('#f6f1e4', 0.9);
-  const darkM = mat('#3b3a36', 0.8);
+  const trimM = mat('#efeae0', 0.88);
+  const darkM = mat('#33373c', 0.75);
 
   // We build the facade on local +z and rotate the whole group to face the street.
   g.rotation.y = facingRot[facing];
   const fw = facing === 'n' || facing === 's' ? w : d;   // width of the front face
   const fd = facing === 'n' || facing === 's' ? d : w;   // depth (front to back)
   box(g, fw, h, fd, wallM, 0, h / 2, 0);
-  box(g, fw + 0.1, 0.5, fd + 0.1, mat('#8d8578', 0.95), 0, 0.25, 0); // plinth
+  box(g, fw + 0.1, 0.5, fd + 0.1, mat('#857f76', 0.95), 0, 0.25, 0); // plinth
 
   // windows (merged)
   const winGeos: THREE.BufferGeometry[] = [];
@@ -124,7 +124,7 @@ export function building(parent: THREE.Object3D, colliders: AABB[], landmarks: L
     }
   }
   if (winGeos.length) {
-    const wmat = mat('#2f4a55', 0.25, 0.4); wmat.userData.live = true;
+    const wmat = mat('#1c2b36', 0.16, 0.55); wmat.userData.live = true;
     const wm = new THREE.Mesh(mergeGeometries(winGeos)!, wmat);
     g.add(wm);
     const fm = new THREE.Mesh(mergeGeometries(frameGeos)!, trimM); fm.castShadow = true; g.add(fm);
@@ -138,7 +138,7 @@ export function building(parent: THREE.Object3D, colliders: AABB[], landmarks: L
     box(g, 2.0, 0.3, 1.0, mat('#9a9389', 0.9), 0, 0.15, fd / 2 + 0.5); // step
   } else {
     // shop front: glass + door + awning + sign
-    box(g, fw - 1.2, fh - 1.0, 0.1, mat('#355d6b', 0.15, 0.6), 0, fh / 2 + 0.15, fd / 2 + 0.03);
+    box(g, fw - 1.2, fh - 1.0, 0.1, mat('#1c2b36', 0.12, 0.65), 0, fh / 2 + 0.15, fd / 2 + 0.03);
     box(g, 1.4, 2.6, 0.12, mat('#1d2a2e', 0.4, 0.4), 0, 1.3, fd / 2 + 0.08);
     const awn = box(g, fw - 0.6, 0.08, 1.6, mat(o.signColors?.[0] ?? '#e74c3c', 0.8), 0, fh - 0.3, fd / 2 + 0.8); awn.rotation.x = 0.18;
     if (o.sign) signboard(g, o.sign, Math.min(fw - 0.8, 10), 1.2, 0, fh + 0.4, fd / 2 + 0.1, 0, o.signColors?.[0] ?? '#e74c3c', o.signColors?.[1] ?? '#fff');
@@ -174,7 +174,7 @@ export function building(parent: THREE.Object3D, colliders: AABB[], landmarks: L
     roof.position.y = h + rh / 2 - 0.05; roof.castShadow = true;
     g.add(roof);
   } else {
-    box(g, fw + 0.2, 0.3, fd + 0.2, mat('#6b665c', 0.9), 0, h + 0.1, 0); // parapet slab
+    box(g, fw + 0.2, 0.3, fd + 0.2, mat('#5e5c56', 0.9), 0, h + 0.1, 0); // parapet slab
     box(g, fw + 0.2, 0.6, 0.2, mat(color, 0.9), 0, h + 0.4, fd / 2);
     box(g, fw + 0.2, 0.6, 0.2, mat(color, 0.9), 0, h + 0.4, -fd / 2);
     box(g, 0.2, 0.6, fd + 0.2, mat(color, 0.9), fw / 2, h + 0.4, 0);
@@ -198,24 +198,24 @@ export function buildWorld(): World {
   const bounds = 74;
 
   // ---- ground, lots, roads ---------------------------------------------
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(260, 260), mat('#7f8f66', 1));
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(260, 260), mat('#79836b', 1));
   ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; group.add(ground);
 
   const lot = (x: number, z: number, w: number, d: number, color: string) => {
     const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), mat(color, 1));
     m.rotation.x = -Math.PI / 2; m.position.set(x, 0.012, z); m.receiveShadow = true; group.add(m);
   };
-  lot(-26.75, -26.75, 41.5, 41.5, '#a8a494'); // market
-  lot(26.75, -26.75, 41.5, 41.5, '#b48a66');  // residential earth
-  lot(-26.75, 26.75, 41.5, 41.5, '#a39f90');  // food
-  lot(26.75, 26.75, 41.5, 41.5, '#8ea56e');   // pitch block
+  lot(-26.75, -26.75, 41.5, 41.5, '#9d9a8d'); // market
+  lot(26.75, -26.75, 41.5, 41.5, '#a58c72');  // residential earth
+  lot(-26.75, 26.75, 41.5, 41.5, '#96948a');  // food
+  lot(26.75, 26.75, 41.5, 41.5, '#7f9668');   // pitch block
 
   const roads: World['roads'] = [
     { x: 0, z: 0, w: 12, d: 160 }, { x: 0, z: 0, w: 160, d: 12 },
     { x: -52, z: 0, w: 9, d: 160 }, { x: 52, z: 0, w: 9, d: 160 },
     { x: 0, z: -52, w: 160, d: 9 }, { x: 0, z: 52, w: 160, d: 9 },
   ];
-  const roadM = mat('#3a3f3e', 0.95);
+  const roadM = mat('#31363b', 0.92);
   for (const r of roads) { const m = new THREE.Mesh(new THREE.BoxGeometry(r.w, 0.08, r.d), roadM); m.position.set(r.x, 0.03, r.z); m.receiveShadow = true; group.add(m); }
 
   // markings (merged)
@@ -226,10 +226,10 @@ export function buildWorld(): World {
     const g1 = new THREE.BoxGeometry(0.8, 0.02, 2.4); g1.translate(-5.25 + i * 1.5, 0.08, s * 9.5); markGeos.push(g1);
     const g2 = new THREE.BoxGeometry(2.4, 0.02, 0.8); g2.translate(s * 9.5, 0.08, -5.25 + i * 1.5); markGeos.push(g2);
   }
-  group.add(new THREE.Mesh(mergeGeometries(markGeos)!, mat('#e8e2c8', 0.9)));
+  group.add(new THREE.Mesh(mergeGeometries(markGeos)!, mat('#e7e4da', 0.88)));
 
   // sidewalks along both avenues
-  const walkM = mat('#bcb7a6', 0.95);
+  const walkM = mat('#b0aea6', 0.94);
   for (const s of [-1, 1]) for (const seg of [[-78, -9], [9, 78]]) {
     const len = seg[1] - seg[0], mid = (seg[0] + seg[1]) / 2;
     const a = new THREE.Mesh(new THREE.BoxGeometry(3, 0.16, len), walkM); a.position.set(s * 7.5, 0.08, mid); a.receiveShadow = true; group.add(a);
@@ -237,8 +237,8 @@ export function buildWorld(): World {
   }
 
   // ---- roundabout ------------------------------------------------------
-  const rb = new THREE.Mesh(new THREE.CylinderGeometry(7, 7.3, 0.35, 40), mat('#6f9d5a', 1)); rb.position.y = 0.17; rb.receiveShadow = true; group.add(rb);
-  const kerb = new THREE.Mesh(new THREE.TorusGeometry(7.1, 0.2, 6, 40), mat('#d8d3c4', 0.9)); kerb.rotation.x = Math.PI / 2; kerb.position.y = 0.3; group.add(kerb);
+  const rb = new THREE.Mesh(new THREE.CylinderGeometry(7, 7.3, 0.35, 40), mat('#718a58', 1)); rb.position.y = 0.17; rb.receiveShadow = true; group.add(rb);
+  const kerb = new THREE.Mesh(new THREE.TorusGeometry(7.1, 0.2, 6, 40), mat('#c9c6bd', 0.9)); kerb.rotation.x = Math.PI / 2; kerb.position.y = 0.3; group.add(kerb);
   box(group, 3.2, 1.2, 3.2, mat('#8d8578', 0.9), 0, 0.9, 0);
   const plinthSign = new THREE.Mesh(new THREE.BoxGeometry(3.0, 1.6, 0.6), mat('#141a16', 0.6));
   plinthSign.position.y = 2.3; plinthSign.castShadow = true; group.add(plinthSign);
@@ -452,7 +452,7 @@ export function buildSky(scene: THREE.Scene, animated: World['animated']) {
   const skyGeo = new THREE.SphereGeometry(420, 24, 12);
   const skyMat = new THREE.ShaderMaterial({
     side: THREE.BackSide, depthWrite: false,
-    uniforms: { top: { value: new THREE.Color('#3f86d6') }, mid: { value: new THREE.Color('#9fd0ee') }, bottom: { value: new THREE.Color('#f3dfc0') } },
+    uniforms: { top: { value: new THREE.Color('#2b62b8') }, mid: { value: new THREE.Color('#93bfe0') }, bottom: { value: new THREE.Color('#f0dcc0') } },
     vertexShader: `varying vec3 vP; void main(){ vP = (modelMatrix * vec4(position,1.0)).xyz; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
     fragmentShader: `uniform vec3 top; uniform vec3 mid; uniform vec3 bottom; varying vec3 vP; void main(){ float h = normalize(vP).y; vec3 c = h > 0.0 ? mix(mid, top, pow(h, 0.6)) : mix(mid, bottom, clamp(-h*6.0, 0.0, 1.0)); gl_FragColor = vec4(c, 1.0); }`,
   });

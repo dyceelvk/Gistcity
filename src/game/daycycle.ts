@@ -53,19 +53,19 @@ export class DayCycle {
     this.sun.intensity = 0.05 + 2.6 * d;
     this.sun.color.copy(lerpC('#ffe2b8', '#ff9a4a', Math.min(1, dusk)));
     this.hemi.intensity = 0.22 + 0.95 * d;
-    this.hemi.color.copy(lerpC('#1a2440', '#dff1ff', d));
-    this.hemi.groundColor.copy(lerpC('#141a16', '#5c6b4e', d));
+    this.hemi.color.copy(lerpC('#1a2440', '#cfe4f2', d));
+    this.hemi.groundColor.copy(lerpC('#141a16', '#63685c', d));
     (this as any).sunAng = ang;
     if (this.skyUniforms) {
-      const nightTop = '#070b1a', nightMid = '#101a33', nightBot = '#2a2436';
-      const duskTop = '#3b4a8a', duskMid = '#f08a5d', duskBot = '#ffd29d';
-      const dayTop = '#3f86d6', dayMid = '#9fd0ee', dayBot = '#f3dfc0';
-      const t = d, k = Math.min(1, dusk) * (1 - d) * 1.4;
+      const nightTop = '#060a1c', nightMid = '#0e1830', nightBot = '#241f33';
+      const duskTop = '#2c3d78', duskMid = '#e8865f', duskBot = '#ffd2a0';
+      const dayTop = '#2b62b8', dayMid = '#93bfe0', dayBot = '#f0dcc0';
+      const t = d, k = Math.min(1, Math.pow(dusk, 0.55) * 1.5) * (1 - d * 0.45);
       this.skyUniforms.top.value.copy(lerpC(nightTop, dayTop, t).lerp(new THREE.Color(duskTop), Math.min(1, k)));
       this.skyUniforms.mid.value.copy(lerpC(nightMid, dayMid, t).lerp(new THREE.Color(duskMid), Math.min(1, k)));
       this.skyUniforms.bottom.value.copy(lerpC(nightBot, dayBot, t).lerp(new THREE.Color(duskBot), Math.min(1, k)));
     }
-    if (this.scene.fog) (this.scene.fog as THREE.Fog).color.copy(lerpC('#0f1422', '#e9dcc3', d).lerp(new THREE.Color('#f4b183'), Math.min(1, dusk) * (1 - d) * 0.8));
+    if (this.scene.fog) (this.scene.fog as THREE.Fog).color.copy(lerpC('#0f1422', '#ddd2bd', d).lerp(new THREE.Color('#eab184'), Math.min(1, dusk) * (1 - d) * 0.75));
     // lights on in the evening
     const lamps = 1 - THREE.MathUtils.smoothstep(d, 0.2, 0.6);
     LAMP_MAT.emissiveIntensity = 0.15 + 2.6 * lamps;
