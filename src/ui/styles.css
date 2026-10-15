@@ -144,6 +144,41 @@ body.touch .dlgChoice kbd { display: none; }
 .changingTag { position: absolute; top: calc(96px + var(--sat)); left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 18px; background: rgba(8, 12, 9, 0.9); border: 1px solid var(--line); border-radius: 14px; font-size: 12px; }
 .changingTag span { color: var(--muted); font-size: 10.5px; }
 
+/* ------------------------------------------------ citizen pages & social */
+.round .badge { position: absolute; top: -2px; right: -2px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 999px; background: var(--danger); color: #fff; font: 800 10px/17px 'DM Sans', sans-serif; text-align: center; }
+.profileStats { display: flex; gap: 16px; margin: 10px 0 4px; font-size: 12px; color: var(--muted); }
+.profileStats b { color: var(--text); font-size: 15px; margin-right: 3px; }
+.profileActions { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.profileActions .off { opacity: .45; }
+.fileBtn { cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.mediaHead { margin: 14px 0 8px; font-size: 13px; letter-spacing: .08em; color: var(--muted); }
+.mediaGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.mediaCell { position: relative; aspect-ratio: 3/4; border-radius: 12px; overflow: hidden; background: #0f1511; border: 1px solid var(--line); }
+.mediaCell img, .mediaCell video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.mediaCell .del { position: absolute; top: 6px; right: 6px; width: 24px; height: 24px; border-radius: 8px; background: rgba(8,12,9,.8); color: #fff; border: 1px solid var(--line); font-size: 13px; }
+
+/* ------------------------------------------------------------- DMs */
+.threadList { display: flex; flex-direction: column; gap: 8px; }
+.threadRow { display: flex; gap: 10px; align-items: center; width: 100%; padding: 10px; border: 1px solid var(--line); border-radius: 14px; background: #141b16; text-align: left; cursor: pointer; }
+.threadRow:hover { border-color: #a5ff3880; }
+.threadMeta { flex: 1; min-width: 0; }
+.threadMeta strong { display: block; font-size: 13.5px; }
+.threadMeta small { color: var(--muted); font-size: 11px; }
+.threadMeta p { margin: 2px 0 0; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pillBadge { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: var(--lime); color: #0b0e0c; font: 800 11px/20px 'DM Sans', sans-serif; text-align: center; }
+.chatHead { display: flex; gap: 10px; align-items: center; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+.chatHead #chatBack { width: 36px; min-width: 36px; padding: 0; justify-content: center; }
+.chatHead small { display: block; color: var(--muted); }
+.chatLog { display: flex; flex-direction: column; gap: 8px; padding: 12px 2px; max-height: 46vh; overflow-y: auto; }
+.chatBubble { max-width: 78%; padding: 9px 12px; border-radius: 14px; font-size: 13px; line-height: 1.5; }
+.chatBubble.mine { align-self: flex-end; background: var(--lime); color: #0b0e0c; border-bottom-right-radius: 4px; }
+.chatBubble.theirs { align-self: flex-start; background: #141b16; border: 1px solid var(--line); border-bottom-left-radius: 4px; }
+.chatBubble small { display: block; margin-top: 4px; opacity: .65; font-size: 10px; }
+.chatMedia { max-width: 220px; border-radius: 10px; display: block; margin-bottom: 4px; }
+.chatComposer { display: flex; gap: 8px; align-items: center; padding-top: 10px; border-top: 1px solid var(--line); }
+.chatComposer input { flex: 1; border: 1px solid var(--line); background: #070a08; color: #fff; border-radius: 12px; padding: 11px 12px; outline: none; font-size: 14px; }
+.attachChip { display: flex; gap: 8px; align-items: center; margin-top: 8px; font-size: 12px; color: var(--muted); }
+
 /* profile card */
 .profileHead { display: flex; gap: 12px; align-items: center; margin-bottom: 10px; }
 .profileHead small { display: block; color: var(--muted); }

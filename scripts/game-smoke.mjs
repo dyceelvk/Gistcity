@@ -4,7 +4,8 @@
  * Boots the game in practice mode and drives real gameplay flows:
  * movement & animation, collisions, sitting, eating/drinking sequences,
  * sleeping, vehicle enter/drive/park, NPC conversations with responses,
- * the changing room, and activity-state invariants.
+ * the changing room, activity-state invariants, citizen pages with media,
+ * and private DMs with real replies.
  *
  * Run:  node scripts/game-smoke.mjs [baseUrl]
  * Needs: puppeteer-core + @sparticuz/chromium (dev-only, not shipped):
@@ -68,6 +69,7 @@ async function main() {
   const page = await browser.newPage();
   page.on('pageerror', (e) => console.log('PAGE ERROR:', e.message));
   page.on('console', (m) => { if (m.type() === 'error') console.log('console.error:', m.text()); });
+  page.on('dialog', (d) => void d.accept()); // confirm() dialogs in the game (block, delete…)
 
   // Fresh practice profile: onboarded, a named citizen, driver's licence in the local society save.
   await page.evaluateOnNewDocument(() => {
@@ -377,6 +379,90 @@ async function main() {
   });
   check('wardrobe runs as private CHANGING_CLOTHES', change.act === 'CHANGING_CLOTHES' && change.curtain, JSON.stringify(change));
   check('leaving the changing room returns to IDLE', change.after === 'IDLE', `after=${change.after}`);
+
+  /* --------------------------------------------- social: pages & DMs */
+  const social = await page.evaluate(async () => {
+    const g = window.__gist;
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    // public page of a local citizen (practice mode)
+    await g.socialUI.openProfile('tunde');
+    await sleep(600);
+    const title = document.getElementById('profileTitle')?.textContent;
+    const mediaCells = document.querySelectorAll('#mediaGrid .mediaCell').length;
+    const followBtn = document.querySelector('[data-act="follow"]');
+    followBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await sleep(400);
+    const followed = document.querySelector('[data-act="follow"]')?.textContent ?? '';
+    return { title, mediaCells, followed: /Following/.test(followed) };
+  });
+  check('tapping a citizen opens their public page', social.title === 'Tunde', `title=${social.title}`);
+  check('profile page shows their photo gallery', social.mediaCells >= 2, `cells=${social.mediaCells}`);
+  check('following a citizen works', social.followed === true, `btn=${social.followed}`);
+
+  const dm = await page.evaluate(async () => {
+    const g = window.__gist;
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    await g.socialUI.message('tunde');
+    await sleep(600);
+    const composer = !!document.querySelector('.chatComposer #chatInput');
+    const input = document.getElementById('chatInput');
+    input.value = 'How far? I dey find partner for business.';
+    document.getElementById('chatSend').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await sleep(500);
+    const mine = document.querySelectorAll('#chatLog .chatBubble.mine').length;
+    await sleep(3400); // the citizen replies (local mailbox)
+    const theirs = document.querySelectorAll('#chatLog .chatBubble.theirs').length;
+    const lastTheirs = document.querySelector('#chatLog .chatBubble.theirs p')?.textContent ?? '';
+    return { composer, mine, theirs, lastTheirs };
+  });
+  check('DM conversation opens with a composer', dm.composer === true, '');
+  check('sent message appears as mine', dm.mine >= 1, `mine=${dm.mine}`);
+  check('the other side actually replies in the DM', dm.theirs >= 1 && !!dm.lastTheirs, `reply="${dm.lastTheirs}"`);
+  await shot('07-dm');
+
+  const mypage = await page.evaluate(async () => {
+    const g = window.__gist;
+    await g.socialUI.openProfile('me');
+    await new Promise((r) => setTimeout(r, 600));
+    return {
+      title: document.getElementById('profileTitle')?.textContent,
+      uploaders: document.querySelectorAll('[data-up]').length,
+      cells: document.querySelectorAll('#mediaGrid .mediaCell').length,
+    };
+  });
+  check('my own page opens with upload controls', mypage.uploaders === 2, `title=${mypage.title} uploaders=${mypage.uploaders}`);
+
+  // upload a real photo file to my page and confirm it renders
+  const tinyPng = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+  writeFileSync('/tmp/gist-tiny.png', Buffer.from(tinyPng, 'base64'));
+  const upload = await page.evaluate(async () => {
+    const g = window.__gist;
+    await g.socialUI.openProfile('me');
+    await new Promise((r) => setTimeout(r, 500));
+    return { ready: !!document.querySelector('[data-up="photo"]') };
+  });
+  if (upload.ready) {
+    const input = await page.$('[data-up="photo"]');
+    await input.uploadFile('/tmp/gist-tiny.png');
+    await new Promise((r) => setTimeout(r, 900));
+  }
+  const afterUpload = await page.evaluate(() => ({
+    cells: document.querySelectorAll('#mediaGrid .mediaCell').length,
+    imgs: document.querySelectorAll('#mediaGrid img').length,
+  }));
+  check('uploaded photo appears on my public page', afterUpload.cells >= 1 && afterUpload.imgs >= 1, JSON.stringify(afterUpload));
+
+  const blocked = await page.evaluate(async () => {
+    const g = window.__gist;
+    await g.socialUI.openProfile('tunde');
+    await new Promise((r) => setTimeout(r, 500));
+    document.querySelector('[data-act="block"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await new Promise((r) => setTimeout(r, 600));
+    const btn = document.querySelector('[data-act="block"]')?.textContent ?? '';
+    const msg = document.querySelector('[data-act="message"]');
+    return { btn, msgDisabled: msg ? msg.disabled : null };
+  });
+  check('blocking stops DMs and is reversible from the page', /Unblock/.test(blocked.btn) && blocked.msgDisabled === true, JSON.stringify(blocked));
 
   /* -------------------------------------- persistence & summary */
   const persist = await page.evaluate(async () => {

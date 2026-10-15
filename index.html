@@ -54,6 +54,7 @@
       <button class="round" data-open="rank" aria-label="Rankings">🏆<span>RANK</span></button>
       <button class="round" data-open="online" aria-label="Citizens online">👥<span>CITY</span></button>
       <button class="round" data-open="vehicles" aria-label="My vehicles">🚗<span>CARS</span></button>
+      <button class="round" data-open="dm" aria-label="Private messages">✉️<span>DM</span><b class="badge hidden" id="dmBadge"></b></button>
       <button class="round" id="camBtn" aria-label="Camera">◉<span>CAM</span></button>
     </nav>
 
@@ -200,8 +201,13 @@
     </section>
 
     <section class="panel hidden" id="panel-profile">
-      <div class="panelHead"><div><small>CITIZEN</small><h2>Profile</h2></div><button class="close" data-close>×</button></div>
+      <div class="panelHead"><div><small id="profileKicker">CITIZEN</small><h2 id="profileTitle">Profile</h2></div><button class="close" data-close>×</button></div>
       <div id="profileBody"></div>
+    </section>
+
+    <section class="panel hidden" id="panel-dm">
+      <div class="panelHead"><div><small>PRIVATE</small><h2>Messages</h2></div><button class="close" data-close>×</button></div>
+      <div id="dmBody" class="sbody"></div>
     </section>
 
     <!-- sign in / create account (shown only when the game runs with a backend) -->

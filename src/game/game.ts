@@ -28,6 +28,8 @@ import { makeSociety, type Society, type VehicleView } from '../net/society';
 import { SocietyPanels, AREA_LABEL, type SocietyHost } from '../ui/society-ui';
 import { ActivityMachine } from './activity';
 import { npcConversation, citizenConversation, type Conversation, type DialogueChoice } from './dialogue';
+import { makeSocial, type Social } from '../net/social';
+import { SocialUI } from '../ui/social-ui';
 
 const WALK = 3.3, RUN = 6.4, RADIUS = 0.38;
 
@@ -117,6 +119,9 @@ export class Game implements HudHost, SocietyHost {
   private myBubble: THREE.Sprite | null = null;
   private myBubbleUntil = 0;
   private lastChip = '';
+  /** Public citizen pages + private DMs. */
+  private social: Social;
+  private socialUI: SocialUI;
   /** Total simulated seconds (clamped dt) — debugging & tests; unlike Clock.elapsedTime it survives slow frames. */
   simSeconds = 0;
 
@@ -189,6 +194,23 @@ export class Game implements HudHost, SocietyHost {
     this.input = new Input(host, document.getElementById('joy')!, document.getElementById('joyKnob')!);
     this.hud = new Hud(this);
     this.panels = new SocietyPanels(this); this.hud.panels = this.panels;
+
+    // citizen pages & private DMs
+    this.social = makeSocial(this.store);
+    this.socialUI = new SocialUI({
+      social: this.social,
+      myUsername: () => this.store.state.username || 'me',
+      myName: () => this.store.state.name,
+      openPanel: (id) => this.hud.open(id),
+      closeAll: () => this.hud.closeAll(),
+      toast: (msg, ms) => this.hud.toast(msg, ms),
+      ask: (title, hint, placeholder, numeric) => this.hud.ask(title, hint, placeholder, numeric),
+      confirm: (title) => window.confirm(title),
+    });
+    this.hud.social = this.socialUI;
+    this.hud.socialOpen = (username) => this.socialUI.openProfile(username);
+    this.social.onMessage = (thread) => { this.socialUI.onIncoming(thread); void this.socialUI.refreshBadge(); };
+    void this.socialUI.refreshBadge();
     this.hud.setTouch(touch);
     this.hud.onAction = (i) => this.runAction(i);
     this.input.onInteract = () => {
@@ -432,13 +454,24 @@ export class Game implements HudHost, SocietyHost {
       run: () => void this.consume(c),
     });
     switch (z.id) {
-      case 'npc': { const npc = this.npcs.nearest(pos, 2.4); return npc ? [{ icon: '💬', label: `Gist with ${npc.name}`, run: () => this.startNpcTalk(npc) }] : []; }
+      case 'npc': {
+        const npc = this.npcs.nearest(pos, 2.4);
+        if (!npc) return [];
+        const un = npc.name.toLowerCase();
+        return [
+          { icon: '💬', label: `Gist with ${npc.name}`, run: () => this.startNpcTalk(npc) },
+          { icon: '👤', label: `${npc.name}'s page`, run: () => void this.socialUI.openProfile(un) },
+          { icon: '✉️', label: `Message ${npc.name}`, run: () => void this.socialUI.message(un) },
+        ];
+      }
       case 'player': {
         const r = z.data && (z.data as any).remote as Remote | undefined; if (!r) return [];
+        const un = r.state.username || r.state.name.toLowerCase();
         return [
           { icon: '💬', label: `Talk to ${r.state.name}`, run: () => this.startPlayerTalk(r) },
           { icon: '👋', label: `Greet ${r.state.name}`, run: () => { cloud.wave(r.state.id, s.name); this.bubble(r, '👋'); this.hud.toast(`You waved at ${r.state.name}`); this.store.update((st) => { if (!this.greeted.has(r.state.id)) { this.greeted.add(r.state.id); st.stats.popularity += 1; st.stats.xp += 5; } }); } },
-          { icon: '👤', label: 'View profile', run: () => void this.hud.showProfile(r.state.id, r.state.name) },
+          { icon: '👤', label: `${r.state.name}'s page`, run: () => void this.socialUI.openProfile(un) },
+          { icon: '✉️', label: `Message ${r.state.name}`, run: () => void this.socialUI.message(un) },
           { icon: '💸', label: 'Send G', run: () => void this.sendGift(r) },
         ];
       }

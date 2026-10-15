@@ -156,3 +156,57 @@ sanity check planned with the social phase); emoji icons need a system emoji fon
 headless container only (real browsers are fine).
 
 **Infrastructure still required** — none for this phase (works online and offline).
+
+## 9. Phase 2 — public citizen pages & private DMs (this commit)
+
+**Server** (`supabase/migrations/20261017000004_gistcity_social.sql`, re-runnable):
+- `profile_media` (public photos ≤24 & clips ≤8 per page), `follows`, `blocks`,
+  `reports` (rules-first moderation, staff-readable), `dm_conversations`
+  (canonical pair, one thread per two citizens), `dm_messages` (membership-checked,
+  idempotent `client_key`, optional attachment under the conversation folder),
+  `rate_limits` (per-minute buckets: 30 DMs, 5 reports, 60 follows…).
+- SECURITY DEFINER RPCs: `profile_page` (identity, bio, occupation from gov job,
+  gallery, follower counts, follow/block/DM relationship), `follow_toggle`,
+  `block_toggle` (removes follows both ways, stops DMs both ways — the blocked
+  side is never told), `report_user`, `media_add`/`media_delete` (path must be in
+  your own folder), `dm_start`, `dm_send`, `dm_threads`, `dm_history`,
+  `dm_mark_read`. Every table is RLS-locked and direct writes are revoked.
+- Storage buckets & policies: `profile-media` (public read, owner-scoped writes)
+  and `dm-media` (private; reads/writes only for the two conversation members).
+- `dm_messages` joins `supabase_realtime` for live delivery.
+
+**Client**:
+- `src/net/social.ts` — `Social` interface with `CloudSocial` (RPC + storage +
+  realtime inbox) and `LocalSocial` (practice mode: local citizens with seeded
+  gallery photos, a local mailbox with human-timed replies, uploads capped).
+- `src/ui/social-ui.ts` — full citizen page (picture/initial avatar, display name,
+  @username, occupation, bio, followers/following/posts, photo & clip gallery,
+  Follow / Message / Block / Report, and on your own page: edit bio, add photo,
+  add clip, delete media) + the DM panel (thread list with unread badges, chat
+  bubbles with timestamps and photo attachments, composer, live replies, toast +
+  badge on incoming mail). Tap any citizen in the world → their page → Message.
+  Your own page & inbox are on the Life panel and the new DM button.
+
+**Tests performed**:
+- `node scripts/db-tests.mjs` (embedded PostgreSQL, same migrations + suites as
+  CI's `run_local.sh`): **9/9 steps pass** — all migrations incl. idempotent
+  re-apply, economy tests, society tests, and the new `social_test.sql`
+  (4 users, profile pages, media ownership rules, follow graph, block privacy &
+  DM interdiction both ways, report validation + rate limit, DM membership/RLS,
+  idempotent send, unread accounting, attachments confined to the conversation,
+  signed-out rejection).
+- `node scripts/game-smoke.mjs`: **47/47 checks pass** — the Phase-1 gameplay
+  suite plus: tapping a citizen opens their public page with their photo
+  gallery; following works; DM opens with a composer; a sent message appears;
+  **the other side actually replies** ("E choke 😂"); my page shows upload
+  controls; an uploaded photo renders in my gallery; blocking disables messaging.
+
+**Remaining defects** — profile pages don't yet show level/popularity from
+`gist_players` (public_profiles still does); DM attachments render only images
+(clips in DMs are permitted as files but preview as photos); presence position
+sync is still client-trusted (server movement check pending).
+
+**Infrastructure still required** — apply the migration to the Supabase project
+with `supabase db push` (no deploy token in this environment), enable realtime
+for `dm_messages` (handled by the migration's publication guard), and create the
+two storage buckets (also handled by the migration when storage exists).

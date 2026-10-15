@@ -66,6 +66,8 @@ export class Hud {
   onDialogueClose: (() => void) | null = null;
   /** A panel was opened (id) or closed (null) — the game reacts (e.g. changing-room state). */
   onPanel: ((id: string | null) => void) | null = null;
+  /** Citizen pages & DMs render through this hook. */
+  social: PanelRenderer | null = null;
 
   constructor(private host: HudHost) {
     const s = host.store;
@@ -117,6 +119,7 @@ export class Hud {
     if (id === 'map') this.drawBigMap();
     if (id === 'account') this.renderAccount();
     this.panels?.render(id);
+    this.social?.render(id);
     this.onPanel?.(id);
   }
   closeAll(resetCamera = true) {
@@ -125,6 +128,7 @@ export class Hud {
     document.body.classList.remove('panel-open');
     $('#changing').classList.add('hidden');
     this.panels?.stopTimers();
+    this.social?.stopTimers();
     if (this.openId === 'style' && resetCamera) this.host.setPortrait(false);
     if (this.openId === 'style') this.host.store.update(() => { /* flush name edits */ });
     const was = this.openId;
@@ -263,21 +267,12 @@ export class Hud {
   }
 
   /** Public profile card of another citizen. */
-  async showProfile(id: string, fallbackName: string) {
-    const body = $('#profileBody');
-    body.innerHTML = `<p class="muted">Loading ${esc(fallbackName)}…</p>`;
-    this.open('profile');
-    try {
-      const p = await cloud.publicProfile(id);
-      if (!p) { body.innerHTML = `<p class="muted">${esc(fallbackName)} has no public profile yet.</p>`; return; }
-      body.innerHTML = `<div class="profileHead"><div class="avatarBig">${esc(p.display_name.charAt(0).toUpperCase())}</div><div><strong>${esc(p.display_name)}</strong><small>@${esc(p.username)}</small></div></div>
-        ${p.bio ? `<p class="bio">${esc(p.bio)}</p>` : '<p class="muted">No bio yet.</p>'}
-        <div class="kv"><span>Citizen since</span><span>${new Date(p.created_at).toLocaleDateString()}</span></div>
-        <div class="kv"><span>Level</span><span>${p.level ?? 1}</span></div>
-        <div class="kv"><span>Popularity</span><span>${p.popularity ?? 0}</span></div>
-        <p class="muted" style="margin-top:12px">Friends, messages and posts are coming in the next phase.</p>`;
-    } catch (e: any) { body.innerHTML = `<p class="muted">${esc(e?.message ?? 'Could not load profile')}</p>`; }
+  /** Open a citizen's public page (photos & clips, follow, message, block, report). */
+  showProfile(username: string, fallbackName = '') {
+    void this.socialOpen(username);
   }
+  /** Filled in by the game: opens a citizen page through the social UI. */
+  socialOpen: (username: string) => Promise<void> = async () => { /* no social UI attached */ };
 
   /* ---------------------------------------------------------- top bar */
 
@@ -477,7 +472,11 @@ export class Hud {
       ['JOBS DONE', `${st.jobsDone}`, ''],
       ['VIBE', st.appearance.vibe, ''],
       ['WARDROBE', `${st.inventory.filter((i) => itemById(i)?.category !== 'furniture').length} pieces`, ''],
-    ].map(([k, v, b]) => `<div class="stat"><small>${k}</small><strong>${esc(v)}</strong>${b}</div>`).join('');
+    ].map(([k, v, b]) => `<div class="stat"><small>${k}</small><strong>${esc(v)}</strong>${b}</div>`).join('')
+      + `<div class="stat"><small>PUBLIC PAGE</small><button class="ghost" id="myPageBtn">Open my page</button></div>
+         <div class="stat"><small>MESSAGES</small><button class="ghost" id="myDmBtn">Open DMs</button></div>`;
+    $('#myPageBtn')?.addEventListener('click', () => void this.socialOpen(st.username || 'me'));
+    $('#myDmBtn')?.addEventListener('click', () => this.open('dm'));
     $('#achievements').innerHTML = Object.entries(ACHIEVEMENTS).map(([id, a]) => `<div class="ach ${st.achievements.includes(id) ? 'on' : ''}"><strong>${st.achievements.includes(id) ? '🏅 ' : '🔒 '}${esc(a.title)}</strong><small>${esc(a.desc)}</small></div>`).join('');
   }
 
