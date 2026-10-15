@@ -1,6 +1,6 @@
 /** Pedestrians that keep the streets alive — and gist with you if you say hi. */
 import * as THREE from 'three';
-import { Avatar } from './avatar';
+import { makeCharacter, type Character } from './character';
 import { randomAppearance } from './appearance';
 import { makeSprite } from './props';
 
@@ -13,7 +13,7 @@ export const GIST_LINES = [
 ];
 
 interface Npc {
-  avatar: Avatar;
+  avatar: Character;
   name: string;
   path: THREE.Vector3[];
   idx: number;
@@ -33,7 +33,7 @@ export class NpcManager {
     const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
     for (let i = 0; i < count; i++) {
       const path = paths[i % paths.length];
-      const avatar = new Avatar(randomAppearance(i * 31 + 7));
+      const avatar = makeCharacter(randomAppearance(i * 31 + 7), 'lo');
       const idx = Math.floor(rnd() * path.length);
       const start = path[idx].clone();
       const next = path[(idx + 1) % path.length];
@@ -67,7 +67,7 @@ export class NpcManager {
           let diff = yaw - n.yaw; while (diff > Math.PI) diff -= Math.PI * 2; while (diff < -Math.PI) diff += Math.PI * 2;
           n.yaw += diff * Math.min(1, dt * 8);
           n.avatar.root.rotation.y = n.yaw;
-          n.avatar.animate(dt, 1);
+          n.avatar.animate(dt, 1, n.speed);
         }
       }
       if (n.bubble) { n.bubbleT -= dt; if (n.bubbleT <= 0) { n.avatar.root.remove(n.bubble); n.bubble = null; } }

@@ -1,0 +1,134 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>GIST – character bake preview</title>
+<style>html,body{margin:0;background:#2b2f36;height:100%;overflow:hidden}canvas{display:block}#info{position:fixed;left:8px;top:8px;color:#fff;font:12px monospace;white-space:pre}</style>
+</head>
+<body>
+<div id="info"></div>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+
+const q = new URLSearchParams(location.search);
+const sex = q.get('sex') || 'f';
+const clip = q.get('clip') || 'idle';
+const hair = q.get('hair') || '';
+const shoes = q.get('shoes') || 'shoes05';
+const morph = q.get('morph') || '';      // e.g. curvy=1,face_round=1
+const hide = (q.get('hide') || '').split(',').filter(Boolean); // region names
+const lo = q.get('lo') === '1';
+const cam = q.get('cam') || 'full';      // full | face | side | back
+const t0 = parseFloat(q.get('t') || '0');
+const regions = q.get('regions') === '1';
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(1);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.shadowMap.enabled = true;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x3a4150);
+scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+const camera = new THREE.PerspectiveCamera(35, innerWidth / innerHeight, 0.05, 50);
+const sun = new THREE.DirectionalLight(0xffffff, 2.2); sun.position.set(2, 4, 3); sun.castShadow = true; scene.add(sun);
+scene.add(new THREE.HemisphereLight(0xcfe3ff, 0x6b5a46, 0.8));
+const floor = new THREE.Mesh(new THREE.CircleGeometry(3, 48), new THREE.MeshStandardMaterial({ color: 0x5d6673 }));
+floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
+const grid = new THREE.GridHelper(4, 8, 0x888888, 0x555555); grid.position.y = 0.001; scene.add(grid);
+
+const manifest = await (await fetch('/characters/manifest.json')).json();
+const model = manifest.models[sex];
+const gltf = await new GLTFLoader().loadAsync('/characters/' + model.file);
+const root = gltf.scene; window.__root = root; window.THREE = THREE;
+scene.add(root);
+const tl = new THREE.TextureLoader();
+const texCache = {}; const texPromises = [];
+function tex(file, srgb = true) {
+  if (!file) return null;
+  if (!texCache[file]) { const pr = tl.loadAsync('/characters/tex/' + file); texPromises.push(pr); const t = new THREE.Texture(); t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace; t.flipY = false; t.anisotropy = 4; texCache[file] = t; pr.then((l) => { t.image = l.image; t.needsUpdate = true; }); }
+  return texCache[file];
+}
+const normalsMode = q.get('normals') === '1';
+const helper = (q.get('helper') || '').split(',').filter(Boolean);
+const palette = ['#ff5555','#55ff55','#5555ff','#ffff55','#ff55ff','#55ffff','#ff9955','#9955ff','#55ff99','#ff5599','#99ff55','#5599ff','#aa4444','#44aa44','#4444aa','#aaaa44','#aa44aa','#44aaaa','#ffffff'];
+const regionNames = manifest.regions;
+const hideMask = new Float32Array(32);
+for (const r of hide) { const i = regionNames.indexOf(r); if (i >= 0) hideMask[i] = 1; }
+root.traverse((o) => {
+  if (!o.isMesh) return;
+  o.castShadow = true; o.receiveShadow = true; o.frustumCulled = false;
+  const name = o.name;
+  const m = o.material;
+  const info = model.materials[m.name];
+  if (normalsMode) { o.material = new THREE.MeshNormalMaterial({ side: THREE.FrontSide }); }
+  if (info && !normalsMode) {
+    if (info.tex) m.map = tex(info.tex);
+    if (info.kind === 'hair') { m.alphaTest = 0.4; m.transparent = false; m.side = THREE.DoubleSide; m.depthWrite = true; }
+    if (info.kind === 'brow' || info.kind === 'lash') { m.transparent = true; m.side = THREE.DoubleSide; m.depthWrite = false; }
+    if (info.kind === 'eye') { m.transparent = true; m.roughness = 0.2; }
+    if (info.kind === 'skin') {
+      m.roughness = 0.55;
+      if (regions && o.geometry.attributes._region) {
+        const colors = new Float32Array(o.geometry.attributes.position.count * 3);
+        const reg = o.geometry.attributes._region;
+        for (let i = 0; i < reg.count; i++) { const c = new THREE.Color(palette[reg.getX(i) % palette.length]); colors[i*3]=c.r; colors[i*3+1]=c.g; colors[i*3+2]=c.b; }
+        o.geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+        m.vertexColors = true; m.map = null;
+      }
+      m.onBeforeCompile = (sh) => {
+        sh.uniforms.uHide = { value: hideMask };
+        sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute float _region; varying float vRegion;').replace('#include <begin_vertex>', '#include <begin_vertex>\nvRegion = _region;');
+        sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uHide[32]; varying float vRegion;').replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\nif (uHide[int(vRegion + 0.5)] > 0.5) discard;');
+      };
+    }
+    m.needsUpdate = true;
+  }
+  if (name === 'body') o.visible = !lo;
+  if (name === 'body_lo') o.visible = lo;
+  if (name === 'tights' || name === 'skirt' || name === 'scalp') {
+    o.visible = helper.includes(name);
+    if (o.visible) {
+      const loopsMode = q.get('loops') === '1';
+      const mat = new THREE.MeshStandardMaterial({ color: 0xdddddd, roughness: 0.8, side: THREE.DoubleSide, wireframe: q.get('wire') === '1' });
+      if (loopsMode && o.geometry.attributes._loop) {
+        const lp = o.geometry.attributes._loop, n = lp.count, colors = new Float32Array(n * 3);
+        for (let i = 0; i < n; i++) { const c = new THREE.Color().setHSL(((lp.getX(i) * 1000) % 7) / 7, 0.8, 0.5); colors[i*3]=c.r; colors[i*3+1]=c.g; colors[i*3+2]=c.b; }
+        o.geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3)); mat.vertexColors = true;
+      }
+      mat.onBeforeCompile = (sh) => { sh.vertexShader = sh.vertexShader.replace('#include <skinning_vertex>', 'transformed += normal * 0.006;\n#include <skinning_vertex>'); };
+      o.material = mat;
+    }
+  }
+  if (name.startsWith('hair_')) o.visible = name === 'hair_' + hair;
+  if (name.startsWith('shoes_')) o.visible = name === 'shoes_' + shoes;
+  if (morph && o.morphTargetDictionary) {
+    for (const kv of morph.split(',')) { const [k, v] = kv.split('='); const i = o.morphTargetDictionary[k]; if (i !== undefined) o.morphTargetInfluences[i] = parseFloat(v || '1'); }
+  }
+});
+const mixer = new THREE.AnimationMixer(root);
+const clips = gltf.animations;
+const c = THREE.AnimationClip.findByName(clips, clip);
+if (c) { const a = mixer.clipAction(c); a.play(); }
+mixer.update(t0);
+const h = model.height_m;
+if (cam === 'face') { camera.position.set(0.0, h - 0.1, 0.75); camera.lookAt(0, h - 0.12, 0); }
+else if (cam === 'side') { camera.position.set(3.2, h * 0.55, 0.0); camera.lookAt(0, h * 0.5, 0); }
+else if (cam === 'back') { camera.position.set(0.0, h * 0.6, -3.4); camera.lookAt(0, h * 0.5, 0); }
+else if (cam === 'three') { camera.position.set(2.2, h * 0.6, 2.6); camera.lookAt(0, h * 0.5, 0); }
+else { camera.position.set(0.0, h * 0.58, 3.4); camera.lookAt(0, h * 0.5, 0); }
+let frames = 0;
+window.__render = (dt = 0) => { mixer.update(dt); renderer.render(scene, camera); frames++; window.__frames = frames; return renderer.info.render.triangles; };
+await Promise.all(texPromises);
+const tStart = performance.now();
+window.__render(0);
+console.log('first render ms', (performance.now() - tStart).toFixed(0));
+window.__ready = true;
+document.getElementById('info').textContent = `${sex} ${clip} t=${t0} clips=${clips.map((c) => c.name + ':' + c.duration.toFixed(2)).join(' ')} tris=${renderer.info.render.triangles}`;
+</script>
+</body>
+</html>

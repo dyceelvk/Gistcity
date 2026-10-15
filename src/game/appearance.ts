@@ -7,7 +7,7 @@
  * models later only changes the renderer — not this schema.
  */
 
-export type HairStyle = 'lowcut' | 'fade' | 'afro' | 'braids' | 'bun' | 'locs' | 'gele' | 'bald';
+export type HairStyle = 'lowcut' | 'fade' | 'waves' | 'afro' | 'braids' | 'bob' | 'long' | 'ponytail' | 'bun' | 'locs' | 'gele' | 'bald';
 export type FaceShape = 'oval' | 'round' | 'square';
 export type Beard = 'none' | 'goatee' | 'full';
 export type TopStyle = 'tee' | 'shirt' | 'blazer' | 'crop' | 'hoodie' | 'native';
@@ -15,6 +15,8 @@ export type BottomStyle = 'trousers' | 'shorts' | 'skirt' | 'joggers';
 export type Accessory = 'cap' | 'glasses' | 'chain' | 'bag' | 'earrings' | 'watch';
 export type Vibe = 'Casual' | 'Street' | 'Baddie' | 'Luxury' | 'Corporate' | 'Custom';
 export type BodyType = 'slim' | 'regular' | 'athletic' | 'curvy';
+export type Build = 'feminine' | 'masculine';
+export type ShoeStyle = 'sneaker' | 'runner' | 'formal' | 'loafer' | 'classic';
 
 export interface Appearance {
   skin: string;
@@ -33,6 +35,10 @@ export interface Appearance {
   vibe: Vibe;
   /** Body shape. Optional for saves made before it existed (treated as 'regular'). */
   body?: BodyType;
+  /** Base body (realistic characters). Optional for old saves (treated as 'masculine'). */
+  build?: Build;
+  /** Shoe model. Optional for old saves (treated as 'sneaker'). */
+  shoes?: ShoeStyle;
 }
 
 export const SKIN_TONES = ['#4a2a1c', '#5c3522', '#6e4029', '#86512f', '#9a6240', '#b07a52', '#c58f66', '#d9a981'];
@@ -46,12 +52,27 @@ export const LIP_COLORS: (string | null)[] = [null, '#8b2d3c', '#c0392b', '#e91e
 export const HAIR_STYLES: { id: HairStyle; label: string }[] = [
   { id: 'lowcut', label: 'Low cut' },
   { id: 'fade', label: 'Fade' },
+  { id: 'waves', label: 'Waves' },
   { id: 'afro', label: 'Afro' },
   { id: 'braids', label: 'Braids' },
-  { id: 'locs', label: 'Locs' },
-  { id: 'bun', label: 'Bun' },
+  { id: 'bob', label: 'Bob' },
+  { id: 'long', label: 'Long' },
+  { id: 'ponytail', label: 'Ponytail' },
   { id: 'gele', label: 'Gele' },
   { id: 'bald', label: 'Bald' },
+];
+/** Styles from older saves that no longer have their own asset. */
+export const LEGACY_HAIR: Partial<Record<string, HairStyle>> = { bun: 'ponytail', locs: 'braids' };
+export const BUILDS: { id: Build; label: string }[] = [
+  { id: 'feminine', label: 'Feminine' },
+  { id: 'masculine', label: 'Masculine' },
+];
+export const SHOE_STYLES: { id: ShoeStyle; label: string }[] = [
+  { id: 'sneaker', label: 'Sneakers' },
+  { id: 'runner', label: 'Runners' },
+  { id: 'classic', label: 'Retro kicks' },
+  { id: 'formal', label: 'Formal' },
+  { id: 'loafer', label: 'Loafers' },
 ];
 export const BODY_TYPES: { id: BodyType; label: string }[] = [
   { id: 'slim', label: 'Slim' },
@@ -107,15 +128,17 @@ export const DEFAULT_APPEARANCE: Appearance = {
   accessories: [],
   vibe: 'Casual',
   body: 'regular',
+  build: 'masculine',
+  shoes: 'sneaker',
 };
 
 /** One-tap style directions. Items the player does not own are skipped at apply time. */
 export const VIBE_PRESETS: Record<Exclude<Vibe, 'Custom'>, Partial<Appearance>> = {
-  Casual: { top: 'tee', topColor: '#f4f0e7', bottom: 'joggers', bottomColor: '#27323a', shoesColor: '#f4f0e7', accessories: [] },
-  Street: { top: 'hoodie', topColor: '#1a1a1a', bottom: 'joggers', bottomColor: '#95a5a6', shoesColor: '#e74c3c', accessories: ['cap', 'chain'] },
-  Baddie: { top: 'crop', topColor: '#e33e79', bottom: 'skirt', bottomColor: '#1a1a1a', shoesColor: '#f4f0e7', accessories: ['earrings', 'bag', 'glasses'], lips: '#c0392b' },
-  Luxury: { top: 'blazer', topColor: '#f4f0e7', bottom: 'trousers', bottomColor: '#f4f0e7', shoesColor: '#d8b46a', accessories: ['watch', 'glasses', 'chain'] },
-  Corporate: { top: 'blazer', topColor: '#1f3a93', bottom: 'trousers', bottomColor: '#1a1a1a', shoesColor: '#5d4037', accessories: ['watch'] },
+  Casual: { top: 'tee', topColor: '#f4f0e7', bottom: 'joggers', bottomColor: '#27323a', shoesColor: '#f4f0e7', shoes: 'sneaker', accessories: [] },
+  Street: { top: 'hoodie', topColor: '#1a1a1a', bottom: 'joggers', bottomColor: '#95a5a6', shoesColor: '#e74c3c', shoes: 'runner', accessories: ['cap', 'chain'] },
+  Baddie: { top: 'crop', topColor: '#e33e79', bottom: 'skirt', bottomColor: '#1a1a1a', shoesColor: '#f4f0e7', shoes: 'sneaker', accessories: ['earrings', 'bag', 'glasses'], lips: '#c0392b' },
+  Luxury: { top: 'blazer', topColor: '#f4f0e7', bottom: 'trousers', bottomColor: '#f4f0e7', shoesColor: '#d8b46a', shoes: 'loafer', accessories: ['watch', 'glasses', 'chain'] },
+  Corporate: { top: 'blazer', topColor: '#1f3a93', bottom: 'trousers', bottomColor: '#1a1a1a', shoesColor: '#1a1a1a', shoes: 'formal', accessories: ['watch'] },
 };
 
 export type ItemCategory = 'top' | 'bottom' | 'accessory' | 'furniture';
@@ -180,6 +203,7 @@ export function applyPreset(a: Appearance, vibe: Exclude<Vibe, 'Custom'>, inv: s
   if (p.top && ownsTop(inv, p.top)) { next.top = p.top; if (p.topColor) next.topColor = p.topColor; }
   if (p.bottom && ownsBottom(inv, p.bottom)) { next.bottom = p.bottom; if (p.bottomColor) next.bottomColor = p.bottomColor; }
   if (p.shoesColor) next.shoesColor = p.shoesColor;
+  if (p.shoes) next.shoes = p.shoes;
   if (p.lips !== undefined) next.lips = p.lips;
   if (p.accessories) next.accessories = p.accessories.filter((x) => ownsAccessory(inv, x));
   return next;
@@ -193,7 +217,7 @@ export function sanitizeAppearance(raw: unknown): Appearance {
   const d = DEFAULT_APPEARANCE;
   return {
     skin: color(r.skin, d.skin),
-    hair: pick(r.hair, HAIR_STYLES.map((h) => h.id), d.hair),
+    hair: pick(LEGACY_HAIR[String(r.hair)] ?? r.hair, HAIR_STYLES.map((h) => h.id), d.hair),
     hairColor: color(r.hairColor, d.hairColor),
     face: pick(r.face, FACE_SHAPES.map((f) => f.id), d.face),
     beard: pick(r.beard, BEARDS.map((b) => b.id), d.beard),
@@ -207,6 +231,9 @@ export function sanitizeAppearance(raw: unknown): Appearance {
       ? (r.accessories.filter((x) => ACCESSORIES.some((a) => a.id === x)) as Accessory[]).slice(0, 6)
       : [],
     vibe: pick(r.vibe, ['Casual', 'Street', 'Baddie', 'Luxury', 'Corporate', 'Custom'] as const, 'Custom'),
+    body: pick(r.body, BODY_TYPES.map((b) => b.id), 'regular'),
+    build: pick(r.build, BUILDS.map((b) => b.id), r.body === 'curvy' ? 'feminine' : 'masculine'),
+    shoes: pick(r.shoes, SHOE_STYLES.map((x) => x.id), 'sneaker'),
   };
 }
 
@@ -219,7 +246,8 @@ export function randomAppearance(seed: number): Appearance {
   const bodies: BodyType[] = fem ? ['slim', 'curvy', 'regular', 'curvy'] : ['regular', 'athletic', 'slim', 'athletic'];
   const tops: TopStyle[] = fem ? ['tee', 'crop', 'shirt', 'native', 'blazer'] : ['tee', 'shirt', 'hoodie', 'native', 'blazer'];
   const bottoms: BottomStyle[] = fem ? ['trousers', 'skirt', 'joggers', 'shorts'] : ['trousers', 'joggers', 'shorts'];
-  const hairs: HairStyle[] = fem ? ['braids', 'bun', 'afro', 'locs', 'gele', 'lowcut'] : ['lowcut', 'fade', 'afro', 'locs', 'bald'];
+  const hairs: HairStyle[] = fem ? ['braids', 'ponytail', 'afro', 'bob', 'long', 'gele', 'lowcut'] : ['lowcut', 'fade', 'waves', 'afro', 'bald'];
+  const shoes: ShoeStyle[] = fem ? ['sneaker', 'runner', 'classic', 'loafer'] : ['sneaker', 'runner', 'classic', 'formal', 'loafer'];
   const accPool: Accessory[] = fem ? ['earrings', 'bag', 'glasses', 'watch'] : ['cap', 'glasses', 'chain', 'watch'];
   const accessories = accPool.filter(() => rnd() > 0.6);
   return {
@@ -236,6 +264,8 @@ export function randomAppearance(seed: number): Appearance {
     shoesColor: pickOf(['#1a1a1a', '#f4f0e7', '#e74c3c', '#5d4037', '#d8b46a']),
     accessories,
     body: pickOf(bodies),
+    build: fem ? 'feminine' : 'masculine',
+    shoes: pickOf(shoes),
     vibe: 'Custom',
   };
 }

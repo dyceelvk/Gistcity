@@ -4,7 +4,7 @@
  * the timing minigame and toasts.
  */
 import {
-  ACCESSORIES, BEARDS, BODY_TYPES, BOTTOMS, CLOTH_COLORS, FACE_SHAPES, HAIR_COLORS, HAIR_STYLES, LIP_COLORS, SKIN_TONES, STORE, TOPS,
+  ACCESSORIES, BEARDS, BODY_TYPES, BOTTOMS, BUILDS, CLOTH_COLORS, FACE_SHAPES, HAIR_COLORS, HAIR_STYLES, LIP_COLORS, SHOE_STYLES, SKIN_TONES, STORE, TOPS,
   applyPreset, itemById, ownsAccessory, ownsBottom, ownsFurniture, ownsTop, type Accessory, type ItemCategory, type Vibe,
 } from '../game/appearance';
 import { ACHIEVEMENTS, levelFor, xpForLevel, type PlayerState, type Store } from '../game/state';
@@ -172,7 +172,9 @@ export class Hud {
     sw($('#topColors'), CLOTH_COLORS, (c) => up((a) => { a.topColor = c!; }));
     sw($('#bottomColors'), CLOTH_COLORS, (c) => up((a) => { a.bottomColor = c!; }));
     sw($('#shoeColors'), CLOTH_COLORS, (c) => up((a) => { a.shoesColor = c!; }));
+    BUILDS.forEach((b) => mk($('#buildChips'), b.label, () => up((a) => { a.build = b.id; })).dataset.v = b.id);
     BODY_TYPES.forEach((b) => mk($('#bodyChips'), b.label, () => up((a) => { a.body = b.id; })).dataset.v = b.id);
+    SHOE_STYLES.forEach((sh) => mk($('#shoeChips'), sh.label, () => up((a) => { a.shoes = sh.id; })).dataset.v = sh.id);
     FACE_SHAPES.forEach((f) => mk($('#faceChips'), f.label, () => up((a) => { a.face = f.id; })).dataset.v = f.id);
     HAIR_STYLES.forEach((h) => mk($('#hairChips'), h.label, () => up((a) => { a.hair = h.id; })).dataset.v = h.id);
     BEARDS.forEach((b) => mk($('#beardChips'), b.label, () => up((a) => { a.beard = b.id; })).dataset.v = b.id);
@@ -196,7 +198,7 @@ export class Hud {
     if (document.activeElement !== nameInput) nameInput.value = st.name;
     const mark = (sel: string, val: string) => $$(sel + ' button').forEach((b) => b.classList.toggle('on', b.dataset.v === val));
     const markC = (sel: string, val: string | null) => $$(sel + ' button').forEach((b) => b.classList.toggle('on', b.dataset.c === (val ?? 'none')));
-    mark('#vibeChips', a.vibe); mark('#bodyChips', a.body ?? 'regular'); mark('#faceChips', a.face); mark('#hairChips', a.hair); mark('#beardChips', a.beard);
+    mark('#vibeChips', a.vibe); mark('#buildChips', a.build ?? 'masculine'); mark('#bodyChips', a.body ?? 'regular'); mark('#shoeChips', a.shoes ?? 'sneaker'); mark('#faceChips', a.face); mark('#hairChips', a.hair); mark('#beardChips', a.beard);
     mark('#topChips', a.top); mark('#bottomChips', a.bottom);
     markC('#skinSwatches', a.skin); markC('#hairColors', a.hairColor); markC('#lipSwatches', a.lips);
     markC('#topColors', a.topColor); markC('#bottomColors', a.bottomColor); markC('#shoeColors', a.shoesColor);

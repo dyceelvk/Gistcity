@@ -38,13 +38,22 @@ wardrobe, apartment and progress are saved in the browser (`localStorage`).
 
 ## What's in the prototype
 
-- **Human characters** — a skinned, smoothly-deforming body (17-bone skeleton,
-  lofted from anatomical cross-sections) with four body types (slim, regular,
-  athletic, curvy), a sculpted head with a painted face (eyes, brows, nose,
-  lips, makeup), natural walk/run/idle motion and real shadows. No external
-  model files: every look is generated from the `Appearance` schema.
-- **Character creator (Style Studio)** — skin tone, body type, face shape, 8
-  hairstyles incl. gele, braids and locs, hair colour, beard, lips/makeup, tops
+- **Realistic human characters** — real scanned-quality bodies baked from
+  [MakeHuman](http://www.makehumancommunity.org/) (CC0 assets) with the
+  `tools/mh_export.py` pipeline: an African female and male base with slim /
+  athletic / curvy body morphs and oval / round / square face morphs, 12 real
+  hair meshes (afro, waves, braids, locs, bob, ponytail, long, …), eyes, brows
+  and lashes, four shoe models, a 53-bone game rig and motion-captured
+  walk / run / idle clips. Clothes and accessories are **tailored at runtime**
+  (`src/game/tailor.ts` cuts tees, shirts, hoodies, blazers, kaftans, trousers,
+  shorts, joggers and skirts directly from the body so every outfit fits every
+  body). Players use the ~27k-triangle body; pedestrians use a 3k-triangle
+  version. The character library is a one-time ~5.5 MB download (cached by the
+  service worker); if it fails to load, the game falls back to the lighter
+  procedural avatar in `src/game/avatar.ts`.
+- **Character creator (Style Studio)** — skin tone, feminine/masculine build,
+  body type, face shape, 12 hairstyles incl. gele, braids and locs, hair colour,
+  beard, lips/makeup, shoe style, tops
   (tee, shirt, hoodie, crop, blazer, native/senator), bottoms (trousers, shorts,
   joggers, skirt), shoe colour, accessories (cap, shades, chain, bag, watch,
   earrings), one-tap vibes (Casual, Street, Baddie, Luxury, Corporate). Change
@@ -120,7 +129,11 @@ through `window.ReactNativeWebView.postMessage`.
 
 ```
 src/game/appearance.ts  appearance schema, presets, item catalogue
-src/game/avatar.ts      skinned procedural human (body types, face texture, outfits, gait)
+src/game/human.ts       realistic MakeHuman-based character runtime (morphs, hair, accessories, clips)
+src/game/tailor.ts      runtime garment cutter (tops/bottoms lofted from the body mesh)
+src/game/character.ts   makeCharacter(): Human when the library is loaded, Avatar fallback
+src/game/avatar.ts      lightweight procedural human (fallback)
+tools/mh_export.py      bakes public/characters/*.glb from a MakeHuman 1.2 data folder
 src/game/world.ts       Gist City generator (buildings, props, zones, NPC paths)
 src/game/interior.ts    your flat + furniture
 src/game/game.ts        controller, interactions, jobs, apartment, sync, loop
@@ -132,9 +145,16 @@ supabase/migrations/    database schema for the game
 
 ## Roadmap (next)
 
-1. Optional high-detail character tier: rigged GLTF heads/clothing served from
-   Cloudflare for flagship devices (same `Appearance` schema); emotes.
+1. More baked wardrobe (jewellery sets, bags, sunglasses variants), emotes and
+   facial expressions on the MakeHuman rig.
 2. Server-authoritative economy (RPCs), daily hustles, Community Gist Challenges
    (scenario votes) and creator bonuses with eligibility checks.
 3. Visiting friends' flats, chat bubbles between real players, more districts
    (Island / Mainland), day–night cycle.
+
+## Credits
+
+- Character bodies, hair, eyes, shoes and the game rig are derived from the
+  [MakeHuman](http://www.makehumancommunity.org/) 1.2 asset library, released
+  under **CC0 1.0** (public domain). Thank you to the MakeHuman community.
+- Everything else (city, clothing, UI, code) is original to this repository.

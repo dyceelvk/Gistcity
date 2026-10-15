@@ -3,7 +3,7 @@
  * apartment, cloud sync and the HUD glue.
  */
 import * as THREE from 'three';
-import { Avatar } from './avatar';
+import { makeCharacter, type Character } from './character';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { CameraRig } from './camera';
 import { Input } from './input';
@@ -19,7 +19,7 @@ import { makeSprite } from './props';
 
 const WALK = 3.3, RUN = 6.4, RADIUS = 0.38;
 
-interface Remote { avatar: Avatar; state: RemoteState; tag: THREE.Sprite; appearanceKey: string }
+interface Remote { avatar: Character; state: RemoteState; tag: THREE.Sprite; appearanceKey: string }
 
 export class Game implements HudHost {
   store: Store;
@@ -32,7 +32,7 @@ export class Game implements HudHost {
   private input: Input;
   private hud: Hud;
   private clock = new THREE.Clock();
-  private avatar: Avatar;
+  private avatar: Character;
   private npcs: NpcManager;
   private jobs: JobSystem;
   private sun: THREE.DirectionalLight;
@@ -97,7 +97,7 @@ export class Game implements HudHost {
     for (const z of this.interior.zones) { const m = makeMarker(z.icon, '#f5c242'); m.position.set(z.x, 0, z.z); m.userData.phase = z.z; m.userData.indoor = true; m.visible = false; this.markers.add(m); }
 
     // player
-    this.avatar = new Avatar(this.store.state.appearance);
+    this.avatar = makeCharacter(this.store.state.appearance, 'hi');
     this.avatar.root.position.copy(this.world.spawn);
     this.avatar.root.rotation.y = this.yaw;
     this.scene.add(this.avatar.root);
@@ -297,7 +297,7 @@ export class Game implements HudHost {
       let r = this.remotesMap.get(id);
       const key = JSON.stringify(st.appearance);
       if (!r) {
-        const avatar = new Avatar(st.appearance);
+        const avatar = makeCharacter(st.appearance, 'hi');
         avatar.root.position.set(st.x, 0, st.z);
         const tag = makeSprite(st.name, { scale: 0.6, bg: 'rgba(20,60,90,0.7)', fg: '#dff4ff' }); tag.position.y = 2.1; avatar.root.add(tag);
         this.remoteLayer.add(avatar.root);
@@ -309,7 +309,7 @@ export class Game implements HudHost {
       }
       r.state = st;
     }
-    for (const [id, r] of this.remotesMap) if (!players.has(id)) { this.remoteLayer.remove(r.avatar.root); this.remotesMap.delete(id); }
+    for (const [id, r] of this.remotesMap) if (!players.has(id)) { this.remoteLayer.remove(r.avatar.root); r.avatar.dispose?.(); this.remotesMap.delete(id); }
   }
 
   /* --------------------------------------------------------------- loop */
@@ -352,7 +352,7 @@ export class Game implements HudHost {
       this.yaw += diff * Math.min(1, dt * 12);
       this.avatar.root.rotation.y = this.yaw;
     }
-    this.avatar.animate(dt, speed < 0.1 ? 0 : speed > (WALK + RUN) / 2 ? 2 : 1);
+    this.avatar.animate(dt, speed < 0.1 ? 0 : speed > (WALK + RUN) / 2 ? 2 : 1, speed);
 
     // zones
     const zones = this.indoor ? this.interior.zones : this.world.zones;

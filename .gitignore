@@ -4,3 +4,5 @@ dist
 .env.local
 android/
 ios/
+_shots/
+__pycache__/

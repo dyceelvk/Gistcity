@@ -1,0 +1,77 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>GIST outfit lab</title>
+<style>html,body{margin:0;height:100%;background:#2a2e36;overflow:hidden}canvas{display:block}#info{position:fixed;left:8px;top:6px;color:#fff;font:12px monospace;white-space:pre}</style>
+</head>
+<body>
+<div id="info">loading…</div>
+<script type="module">
+import * as THREE from 'three';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { loadHumanLibrary, Human } from '/src/game/human.ts';
+import { DEFAULT_APPEARANCE, randomAppearance } from '/src/game/appearance.ts';
+
+const q = new URLSearchParams(location.search);
+const clip = q.get('clip') || 'none';
+const t0 = parseFloat(q.get('t') || '0');
+const cam = q.get('cam') || 'full';
+const quality = q.get('lo') === '1' ? 'lo' : 'hi';
+const n = parseInt(q.get('n') || '1');
+const seed = parseInt(q.get('seed') || '1');
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight); renderer.setPixelRatio(1);
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.0;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x3a4150);
+const camera = new THREE.PerspectiveCamera(32, innerWidth / innerHeight, 0.05, 50);
+scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+const sun = new THREE.DirectionalLight(0xffffff, 2.2); sun.position.set(2, 5, 3); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.left = -3; sun.shadow.camera.right = 3; sun.shadow.camera.top = 3; sun.shadow.camera.bottom = -3; scene.add(sun);
+scene.add(new THREE.HemisphereLight(0xcfe6ff, 0x5a4a3a, 0.5));
+const floor = new THREE.Mesh(new THREE.CircleGeometry(6, 48), new THREE.MeshStandardMaterial({ color: 0x5d6673 }));
+floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
+
+const lib = await loadHumanLibrary();
+if (!lib) throw new Error('library failed');
+
+function appearanceFromQuery(i) {
+  let a = q.get('rand') ? randomAppearance(seed + i * 17) : { ...DEFAULT_APPEARANCE, accessories: [] };
+  for (const [k, v] of q.entries()) {
+    if (k === 'accessories') a.accessories = v ? v.split(',') : [];
+    else if (k === 'lips') a.lips = v === 'none' ? null : v;
+    else if (k in a || ['build', 'shoes', 'body'].includes(k)) a[k] = v;
+  }
+  return a;
+}
+const humans = [];
+for (let i = 0; i < n; i++) {
+  const h = new Human(appearanceFromQuery(i), { quality });
+  const spacing = 0.9;
+  h.root.position.x = (i - (n - 1) / 2) * spacing;
+  if (q.get('yaw')) h.root.rotation.y = parseFloat(q.get('yaw'));
+  scene.add(h.root); humans.push(h);
+}
+window.__humans = humans; window.THREE = THREE; window.__scene = scene;
+const speedClass = clip === 'walk' ? 1 : clip === 'run' ? 2 : 0;
+// settle animation weights instantly
+for (const h of humans) { for (let i = 0; i < 40; i++) h.animate(1 / 30, speedClass); h.animate(t0, speedClass); }
+const hgt = humans[0].height;
+const span = Math.max(1, (n - 1) * 0.9 + 1.2);
+if (cam === 'face') { camera.position.set(0.0, hgt - 0.1, 0.65); camera.lookAt(0, hgt - 0.12, 0); }
+else if (cam === 'side') { camera.position.set(3.4, hgt * 0.55, 0.0); camera.lookAt(0, hgt * 0.5, 0); }
+else if (cam === 'back') { camera.position.set(0.0, hgt * 0.6, -3.6 * span / 1.2); camera.lookAt(0, hgt * 0.5, 0); }
+else if (cam === 'three') { camera.position.set(2.4, hgt * 0.62, 2.8); camera.lookAt(0, hgt * 0.5, 0); }
+else if (cam === 'upper') { camera.position.set(0.0, hgt * 0.78, 1.6); camera.lookAt(0, hgt * 0.72, 0); }
+else { camera.position.set(0.0, hgt * 0.58, 3.6 * span / 1.2); camera.lookAt(0, hgt * 0.5, 0); }
+let frames = 0;
+window.__render = (dt = 0) => { for (const h of humans) h.animate(dt, speedClass); renderer.render(scene, camera); frames++; return renderer.info.render; };
+await new Promise((r) => setTimeout(r, 400)); // let lazy hair/shoe textures arrive
+const tStart = performance.now();
+const info = window.__render(0);
+document.getElementById('info').textContent = `${quality} n=${n} clip=${clip} tris=${info.triangles} calls=${info.calls} first=${(performance.now() - tStart).toFixed(0)}ms\n${JSON.stringify(humans[0].appearance)}`;
+window.__ready = true;
+</script>
+</body>
+</html>
