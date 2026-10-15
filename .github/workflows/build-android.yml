@@ -8,11 +8,13 @@
 #   ANDROID_KEYSTORE_PASSWORD / ANDROID_KEY_ALIAS / ANDROID_KEY_PASSWORD
 # Without the keystore secrets the APK is debug-signed (installable, but a
 # later build cannot update over it without uninstalling first).
+# Arena session branches (arena/**) build and publish the same way as main so
+# the session's work always has a phone install link.
 name: Build Android APK
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'arena/**']
     paths-ignore: ['docs/**', '**.md']
   workflow_dispatch:
 
@@ -94,7 +96,7 @@ jobs:
           name: GistCity-apk
           path: GistCity.apk
       - name: Publish release (latest APK)
-        if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/arena/')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
