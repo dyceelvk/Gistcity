@@ -315,3 +315,23 @@ the Bank (loans/deposits) and the Housing market remain honestly "coming soon"
 
 **Infrastructure still required** — apply the migration to the Supabase project
 (`supabase db push`).
+
+## 12. Android APK delivery (this commit)
+
+**Built & published** — `GistCity APK 0.0.4` (tag `apk-v0.0.4`, `GistCity.apk` 8.4 MB,
+package `com.rielinc.gistcity`, versionCode 104) via `.github/workflows/build-android.yml`
+on GitHub Actions, from `3d47e64` (Phases 1–4 + the workflow change below). Install link:
+<https://github.com/dyceelvk/Gistcity/releases/latest/download/GistCity.apk>.
+
+**Change** — the workflow now also builds on pushes to `arena/**` session branches and
+publishes the release from them (previously `main` only; `workflow_dispatch` is not
+permitted by this environment's token, so the push trigger is the build path). Web assets,
+typecheck, Capacitor project generation, `scripts/android-postsync.mjs` branding and
+Gradle assembly all pass on CI (run 38803654953, 1m59s).
+
+**Remaining infrastructure** —
+- `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` Actions secrets are unset, so the APK is
+  signed in **offline practice mode** (the whole world is playable; accounts, G economy and
+  multiplayer need those two values, then any push rebuilds the APK with them baked in).
+- No `ANDROID_KEYSTORE_*` secrets: the APK is debug-signed — installable, but a later build
+  cannot update over it without uninstalling first. Add a release keystore to fix.
