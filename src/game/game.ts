@@ -32,6 +32,9 @@ import { makeSocial, type Social } from '../net/social';
 import { SocialUI } from '../ui/social-ui';
 import { makeFamily, type Family } from '../net/family';
 import { FamilyUI } from '../ui/family-ui';
+import { makeOpportunity, type Opportunity } from '../net/opportunity';
+import { OpportunityUI } from '../ui/opportunity-ui';
+import { scanFace, applyScan } from './facescan';
 
 const WALK = 3.3, RUN = 6.4, RADIUS = 0.38;
 
@@ -127,6 +130,9 @@ export class Game implements HudHost, SocietyHost {
   /** Marriage, family & ageing. */
   private family: Family;
   private familyUI: FamilyUI;
+  /** Business permits, investing & the giving economy. */
+  private opp: Opportunity;
+  private oppUI: OpportunityUI;
   /** Total simulated seconds (clamped dt) — debugging & tests; unlike Clock.elapsedTime it survives slow frames. */
   simSeconds = 0;
 
@@ -230,6 +236,21 @@ export class Game implements HudHost, SocietyHost {
       familyRoom: () => void this.familyRoom(),
     });
     this.hud.family = this.familyUI;
+
+    // business permits, investing & the giving economy
+    this.opp = makeOpportunity(this.store);
+    this.oppUI = new OpportunityUI({
+      opp: this.opp,
+      cash: () => this.store.state.cash,
+      myVehicles: () => this.myVeh.map((v) => ({ id: v.id, name: v.name })),
+      openPanel: (id) => this.hud.open(id),
+      toast: (msg, ms) => this.hud.toast(msg, ms),
+      ask: (title, hint, placeholder, numeric) => this.hud.ask(title, hint, placeholder, numeric),
+      confirm: (title) => window.confirm(title),
+      onMoney: () => { /* the wallet pill follows the store */ },
+      begFromWorld: () => void this.begFromWorld(),
+    });
+    this.hud.opp = this.oppUI;
     this.hud.setTouch(touch);
     this.hud.onAction = (i) => this.runAction(i);
     this.input.onInteract = () => {
@@ -481,6 +502,7 @@ export class Game implements HudHost, SocietyHost {
           { icon: '💬', label: `Gist with ${npc.name}`, run: () => this.startNpcTalk(npc) },
           { icon: '👤', label: `${npc.name}'s page`, run: () => void this.socialUI.openProfile(un) },
           { icon: '✉️', label: `Message ${npc.name}`, run: () => void this.socialUI.message(un) },
+          { icon: '🤲', label: `Ask ${npc.name} for help`, run: () => void this.begAsk(un) },
         ];
       }
       case 'player': {
@@ -491,6 +513,7 @@ export class Game implements HudHost, SocietyHost {
           { icon: '👋', label: `Greet ${r.state.name}`, run: () => { cloud.wave(r.state.id, s.name); this.bubble(r, '👋'); this.hud.toast(`You waved at ${r.state.name}`); this.store.update((st) => { if (!this.greeted.has(r.state.id)) { this.greeted.add(r.state.id); st.stats.popularity += 1; st.stats.xp += 5; } }); } },
           { icon: '👤', label: `${r.state.name}'s page`, run: () => void this.socialUI.openProfile(un) },
           { icon: '✉️', label: `Message ${r.state.name}`, run: () => void this.socialUI.message(un) },
+          { icon: '🤲', label: `Ask ${r.state.name} for help`, run: () => void this.begAsk(un) },
           { icon: '💸', label: 'Send G', run: () => void this.sendGift(r) },
         ];
       }
@@ -514,7 +537,11 @@ export class Game implements HudHost, SocietyHost {
         { icon: '💍', label: 'Marriage & family desk', run: () => { this.visit('gov'); this.hud.open('registry'); } },
         { icon: '👶', label: 'Birth registry (today)', run: () => { this.visit('gov'); this.hud.open('registry'); } },
       ];
-      case 'gov-revenue': return [{ icon: '🧾', label: 'Revenue desk', disabled: 'Business permits — coming soon', run: () => {} }];
+      case 'gov-revenue': return [
+        { icon: '💼', label: 'Business permits & roles', run: () => { this.visit('gov'); this.hud.open('revenue'); } },
+        { icon: '📈', label: 'Investment desk', run: () => { this.visit('gov'); this.hud.open('revenue'); } },
+        { icon: '🤲', label: 'Ask for help (daily charity)', run: () => void this.collectCharity() },
+      ];
       case 'hospital-desk': case 'pharmacy': {
         const acts = [{ icon: z.id === 'pharmacy' ? '💊' : '🏥', label: z.id === 'pharmacy' ? 'Pharmacy counter' : 'Reception: see the doctor', run: () => this.hud.open('hospital') }];
         if (z.id === 'hospital-desk') acts.push({ icon: '👶', label: 'Maternity room: start a family', run: () => void this.familyRoom() } as any);
@@ -774,6 +801,51 @@ export class Game implements HudHost, SocietyHost {
     } else {
       this.hud.toast(r.message ?? 'Could not register the birth', 4500);
     }
+  }
+
+  /* ------------------------------------------------ the giving economy */
+
+  /** Collect the daily charity from the Community Fund (capped, dignified). */
+  private async collectCharity() {
+    const r = await this.opp.charity();
+    this.hud.toast(r.ok ? `🤲 The Community Fund gave you ${fmtG(r.amount ?? 0)} (${r.left ?? 0} left today). Use it well.` : (r.message ?? 'Nothing today'), 4500);
+    if (r.ok) this.hud.emote('🙏');
+    this.refreshActions();
+  }
+
+  /** Ask a specific citizen for help — they answer; giving is always their choice. */
+  private async begAsk(username: string) {
+    const amount = await this.hud.ask('Ask for help', `${username} will see your ask and decide. How much do you need? (50–20,000 G)`, 'Amount in G');
+    if (amount === null) return;
+    const r = await this.opp.begAsk(username, Math.round(Number(amount) || 0));
+    if (r.ok) {
+      this.hud.emote('🤲');
+      this.hud.toast(`Your ask has been sent to ${username}. Wait for their answer.`, 4200);
+    } else this.hud.toast(r.message ?? 'Could not send the ask');
+    this.refreshActions();
+  }
+
+  private async begFromWorld() {
+    const who = await this.hud.ask('Ask a citizen for help', 'Who do you want to ask? Their username is on their page.', 'Username', false);
+    if (who === null || !who.trim()) return;
+    await this.begAsk(who.trim().toLowerCase());
+  }
+
+  /* ---------------------------------------------------------- face scan */
+
+  /** Look at the player once and match their skin tone to the character. */
+  scanFace(): void {
+    void (async () => {
+      try {
+        this.hud.toast('📷 Looking at you — hold still…', 2500);
+        const scan = await scanFace();
+        this.store.update((s) => { s.appearance = applyScan(s.appearance, scan); });
+        this.applyAppearance();
+        this.hud.toast(`📷 Face scan done — ${scan.note}. Tweak it in the studio.`, 4500);
+      } catch (e: any) {
+        this.hud.toast(e?.message ?? 'Face scan needs a camera.', 4500);
+      }
+    })();
   }
   private bubble(r: Remote, text: string) {
     if (r.bubble) r.avatar.root.remove(r.bubble);

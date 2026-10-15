@@ -41,6 +41,8 @@ export interface HudHost {
   exitVehicle(): void;
   /** The character's current age in the accelerated city calendar. */
   myAge(): number;
+  /** Look at the player once and match their skin tone to the character. */
+  scanFace(): void;
 }
 export interface PanelRenderer { render(id: string): void; stopTimers(): void }
 
@@ -72,6 +74,8 @@ export class Hud {
   social: PanelRenderer | null = null;
   /** Marriage, family & the registry render through this hook. */
   family: PanelRenderer | null = null;
+  /** The revenue desk (permits, investing, giving) renders through this hook. */
+  opp: PanelRenderer | null = null;
 
   constructor(private host: HudHost) {
     const s = host.store;
@@ -87,6 +91,7 @@ export class Hud {
     $('#driveExit').addEventListener('click', () => host.exitVehicle());
     $('#resetBtn').addEventListener('click', () => { if (confirm('Reset your GIST save on this device? This cannot be undone.')) host.resetSave(); });
     $('#dlgClose').addEventListener('click', () => this.closeDialogue(true));
+    $('#scanBtn').addEventListener('click', () => this.host.scanFace());
     $$('#storeTabs button').forEach((b) => b.addEventListener('click', () => { this.storeTab = b.dataset.tab as ItemCategory; this.renderStore(); }));
     const nameInput = $<HTMLInputElement>('#nameInput');
     nameInput.addEventListener('change', () => {
@@ -125,6 +130,7 @@ export class Hud {
     this.panels?.render(id);
     this.social?.render(id);
     this.family?.render(id);
+    this.opp?.render(id);
     this.onPanel?.(id);
   }
   closeAll(resetCamera = true) {
@@ -135,6 +141,7 @@ export class Hud {
     this.panels?.stopTimers();
     this.social?.stopTimers();
     this.family?.stopTimers();
+    this.opp?.stopTimers();
     if (this.openId === 'style' && resetCamera) this.host.setPortrait(false);
     if (this.openId === 'style') this.host.store.update(() => { /* flush name edits */ });
     const was = this.openId;

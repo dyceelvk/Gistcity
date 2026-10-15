@@ -262,3 +262,56 @@ their own accounts); inheritance/wills not implemented.
 
 **Infrastructure still required** — apply the migration to the Supabase project
 (`supabase db push`).
+
+## 11. Phase 4 — opportunity: roles, investing & the giving economy (this commit)
+
+**Server** (`supabase/migrations/20261019000006_gistcity_opportunity.sql`, re-runnable):
+- **Business permits & roles**: `biz_permits` (trader 25k / food seller 15k /
+  car dealer 80k, paid to the city through the ledger) — real money paths open
+  with the role: `trade_run` (market runs pay 700–2,800 G profit, 8/day cap,
+  permit-gated) and `vehicle_list` / `vehicle_unlist` / `vehicle_buy_from`
+  (citizen-to-citizen car sales: 95% to the seller, 5% market fee, ownership
+  transfers server-side). Age 18+ checked before any money moves.
+- **Investing**: `invest_funds` (Grain / Hustle / Estate) with deterministic
+  prices (base × compound daily rate on the city clock — auditable, no random
+  money), `invest_view` / `invest_buy` / `invest_sell` (FIFO unit accounting
+  through the ledger).
+- **The giving economy**: `charity_collect` (Community Fund, 150–600 G, 5×/day,
+  capped so it is a start not a faucet), `beg_ask` / `beg_respond` /
+  `beg_inbox` — asking a citizen for help is an answerable request; giving is
+  always the giver's choice and moves real G between wallets.
+
+**Client**:
+- `src/net/opportunity.ts` (Cloud RPCs + local practice save with the same
+  rules), `src/ui/opportunity-ui.ts` — the **Revenue desk** panel in-world at
+  the Secretariat: buy permits & see your roles, run to market, browse/buy the
+  car market and list your own cars (dealers), invest in city funds with live
+  portfolio value, collect charity, ask a citizen for help.
+- In-world asks: every NPC and player interaction menu has **🤲 Ask … for
+  help**; players also have Send G. The `gov-revenue` desk is no longer
+  "coming soon".
+- **Face-scan-lite** (`src/game/facescan.ts`): one selfie-camera snapshot is
+  sampled on-device for skin tone, matched to the character palette, and the
+  image is discarded — never uploaded (the brief's face scan, kept small and
+  private). The Style Studio has the 📷 button; no camera → a clear message.
+
+**Tests performed** — `node scripts/db-tests.mjs`: **13/13 steps pass**
+(`opportunity_test.sql`: unknown/short-name permits, fee accounting, duplicate
+permit, child rejected with **no money moved**, car listing + self-buy refusal,
+buyer pays / seller receives price − 5% / ownership transferred / listing
+closed, listing without a permit refused, investment buy/sell/oversell/unknown
+fund with wallet accounting, charity range + daily cap, ask → inbox → gift
+settlement both sides, trader market runs + permit gate, and a final
+`economy_audit()` supply check). `node scripts/game-smoke.mjs`: **70/70 checks
+pass** — the full earlier suite plus: revenue desk opens, permit fee charged,
+role active, market runs pay, investing buy/hold/sell round-trip, charity
+150–600 G, help-ask gifts 500 G, face scan button with graceful no-camera
+feedback, persistence.
+
+**Remaining defects** — face scan suggests the tone only (hair/face shape stay
+manual); offline car sales settle after a local beat rather than a live buyer;
+the Bank (loans/deposits) and the Housing market remain honestly "coming soon"
+(the eligibility scaffolding — age gates — is already enforced server-side).
+
+**Infrastructure still required** — apply the migration to the Supabase project
+(`supabase db push`).

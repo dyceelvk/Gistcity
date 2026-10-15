@@ -543,6 +543,92 @@ async function main() {
   });
   check('one newborn per couple per day (server rule)', again.children === 1 && /One baby per couple per day/.test(again.toast), JSON.stringify(again));
 
+  /* ------------------------- opportunity: roles, investing, giving */
+  const permit = await page.evaluate(async () => {
+    const g = window.__gist;
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    g.hud.open('revenue');
+    await sleep(700);
+    const deskOpen = !!document.getElementById('revenueBody')?.textContent.includes('BUSINESS PERMITS');
+    const cash0 = g.store.state.cash;
+    document.querySelector('[data-permit="trader"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await sleep(400);
+    document.getElementById('askInput').value = 'Testero Trading';
+    document.getElementById('askOk').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await sleep(600);
+    const cash1 = g.store.state.cash;
+    const owned = /Permit active/.test(document.getElementById('revenueBody').textContent);
+    // a market run earns with the role
+    document.querySelector('[data-trade="trader"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await sleep(600);
+    const cash2 = g.store.state.cash;
+    return { deskOpen, paid: cash0 - cash1, owned, earned: cash2 - cash1 };
+  });
+  check('revenue desk opens with permits & roles', permit.deskOpen === true, '');
+  check('buying the trader permit charges the city fee', permit.paid === 25000, `paid=${permit.paid}`);
+  check('the role is active after purchase', permit.owned === true, '');
+  check('market runs pay the trader role', permit.earned > 700, `earned=${permit.earned}`);
+
+  const invest = await page.evaluate(async () => {
+    const g = window.__gist;
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    const cash0 = g.store.state.cash;
+    document.querySelector('[data-fund-buy="grain"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await sleep(400);
+    document.getElementById('askInput').value = '5000';
+    document.getElementById('askOk').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await sleep(600);
+    const cash1 = g.store.state.cash;
+    const held = /grain/.test(document.getElementById('revenueBody').textContent);
+    document.querySelector('[data-fund-sell="grain"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await sleep(400);
+    document.getElementById('askInput').value = '5000';
+    document.getElementById('askOk').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await sleep(600);
+    const cash2 = g.store.state.cash;
+    return { bought: cash0 - cash1, held, soldBack: cash2 - cash1 };
+  });
+  check('investing buys units from the wallet', invest.bought === 5000, `paid=${invest.bought}`);
+  check('holdings appear in the portfolio', invest.held === true, '');
+  check('selling returns funds to the wallet', invest.soldBack >= 4900, `back=${invest.soldBack}`);
+
+  const give = await page.evaluate(async () => {
+    const g = window.__gist;
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    const cash0 = g.store.state.cash;
+    document.querySelector('[data-act="charity"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await sleep(500);
+    const charityGain = g.store.state.cash - cash0;
+    // ask a citizen for help (local citizen answers after a beat)
+    document.querySelector('[data-act="beg"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await sleep(350);
+    document.getElementById('askInput').value = 'tunde';
+    document.getElementById('askOk').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await sleep(350);
+    document.getElementById('askInput').value = '500';
+    document.getElementById('askOk').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await sleep(2600);
+    const begGain = g.store.state.cash - cash0 - charityGain;
+    return { charityGain, begGain };
+  });
+  check('charity is a real (modest) income path', give.charityGain >= 150 && give.charityGain <= 600, `gain=${give.charityGain}`);
+  check('asking a citizen for help can bring gifts', give.begGain === 500, `gain=${give.begGain}`);
+
+  const scan = await page.evaluate(async () => {
+    const g = window.__gist;
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    g.hud.open('style');
+    await sleep(400);
+    const btn = !!document.getElementById('scanBtn');
+    document.getElementById('scanBtn').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await sleep(900);
+    const toast = document.getElementById('toast').textContent;
+    g.hud.closeAll();
+    return { btn, toast };
+  });
+  check('face scan exists in the Style Studio', scan.btn === true, '');
+  check('face scan gives clear feedback without a camera', scan.toast.trim().length > 0, `toast="${scan.toast}"`);
+
   /* -------------------------------------- persistence & summary */
   const persist = await page.evaluate(async () => {
     const g = window.__gist;
