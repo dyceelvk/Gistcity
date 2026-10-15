@@ -60,6 +60,12 @@ export class Hud {
   onAction: ((index: number) => void) | null = null;
   /** Society panels (school, government, church, …) render through this hook. */
   panels: PanelRenderer | null = null;
+  /** Conversation with an NPC or another player: a choice was picked (index into the choices). */
+  onDialogueChoice: ((index: number) => void) | null = null;
+  /** The player ended the conversation (button or walking away). */
+  onDialogueClose: (() => void) | null = null;
+  /** A panel was opened (id) or closed (null) — the game reacts (e.g. changing-room state). */
+  onPanel: ((id: string | null) => void) | null = null;
 
   constructor(private host: HudHost) {
     const s = host.store;
@@ -74,6 +80,7 @@ export class Hud {
     $('#wakeBtn').addEventListener('click', () => host.wakeUp());
     $('#driveExit').addEventListener('click', () => host.exitVehicle());
     $('#resetBtn').addEventListener('click', () => { if (confirm('Reset your GIST save on this device? This cannot be undone.')) host.resetSave(); });
+    $('#dlgClose').addEventListener('click', () => this.closeDialogue(true));
     $$('#storeTabs button').forEach((b) => b.addEventListener('click', () => { this.storeTab = b.dataset.tab as ItemCategory; this.renderStore(); }));
     const nameInput = $<HTMLInputElement>('#nameInput');
     nameInput.addEventListener('change', () => {
@@ -96,7 +103,12 @@ export class Hud {
     el.classList.remove('hidden');
     this.openId = id;
     document.body.classList.add('panel-open');
-    if (id === 'style') { this.host.setPortrait(true); this.renderStyle(this.host.store.state); }
+    if (id === 'style') {
+      this.host.setPortrait(true);
+      this.renderStyle(this.host.store.state);
+      // Private changing area: the wardrobe / booth curtains come across while you change.
+      if (!this.host.isCreating()) $('#changing').classList.remove('hidden');
+    }
     if (id === 'store') this.renderStore();
     if (id === 'home') this.renderHome();
     if (id === 'jobs') this.renderJobs();
@@ -105,15 +117,19 @@ export class Hud {
     if (id === 'map') this.drawBigMap();
     if (id === 'account') this.renderAccount();
     this.panels?.render(id);
+    this.onPanel?.(id);
   }
   closeAll(resetCamera = true) {
     if (this.openId === 'style' && this.host.isCreating()) { this.toast('Finish your character first, then tap ENTER GISTCITY'); return; }
     $$('.panel').forEach((p) => p.classList.add('hidden'));
     document.body.classList.remove('panel-open');
+    $('#changing').classList.add('hidden');
     this.panels?.stopTimers();
     if (this.openId === 'style' && resetCamera) this.host.setPortrait(false);
     if (this.openId === 'style') this.host.store.update(() => { /* flush name edits */ });
+    const was = this.openId;
     this.openId = null;
+    if (was) this.onPanel?.(null);
   }
   get isOpen() { return this.openId !== null; }
   toggle(id: string) { if (this.openId === id) this.closeAll(); else this.open(id); }
@@ -166,6 +182,65 @@ export class Hud {
     if (on) { $('#sleepEnergy').textContent = `${Math.round(energy)}%`; $('#sleepFill').style.width = `${Math.round(energy)}%`; }
   }
   emote(e: string) { const el = $('#emote'); el.textContent = e; el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop'); }
+
+  /* ---------------------------------------------------------- dialogue */
+
+  /** Show a conversation: the other side's line plus real response choices (keys 1–6). */
+  showDialogue(name: string, role: string, line: string, choices: { icon: string; label: string; disabled?: string }[]) {
+    $('#dlgName').textContent = name;
+    $('#dlgRole').textContent = role.toUpperCase();
+    $('#dlgAvatar').textContent = name.charAt(0).toUpperCase();
+    $('#dlgLine').textContent = line;
+    const wrap = $('#dlgChoices');
+    wrap.innerHTML = '';
+    choices.slice(0, 6).forEach((c, i) => {
+      const b = document.createElement('button');
+      b.className = 'dlgChoice' + (c.disabled ? ' off' : '');
+      b.innerHTML = `<kbd>${i + 1}</kbd><span class="ic">${c.icon}</span><span class="lb">${esc(c.label)}</span>`;
+      if (c.disabled) b.title = c.disabled;
+      b.addEventListener('click', () => this.onDialogueChoice?.(i));
+      wrap.appendChild(b);
+    });
+    $('#dialogue').classList.remove('hidden');
+    this.activityChip('Talking', '💬');
+  }
+  /** Update just the spoken line (after a choice, while keeping the choices). */
+  dialogueLine(line: string) { $('#dlgLine').textContent = line; }
+  dialogueChoices(choices: { icon: string; label: string; disabled?: string }[]) {
+    const wrap = $('#dlgChoices');
+    wrap.innerHTML = '';
+    choices.slice(0, 6).forEach((c, i) => {
+      const b = document.createElement('button');
+      b.className = 'dlgChoice' + (c.disabled ? ' off' : '');
+      b.innerHTML = `<kbd>${i + 1}</kbd><span class="ic">${c.icon}</span><span class="lb">${esc(c.label)}</span>`;
+      b.addEventListener('click', () => this.onDialogueChoice?.(i));
+      wrap.appendChild(b);
+    });
+  }
+  get dialogueOpen() { return !$('#dialogue').classList.contains('hidden'); }
+  closeDialogue(notify = true) {
+    if (!this.dialogueOpen) return;
+    $('#dialogue').classList.add('hidden');
+    if (notify) this.onDialogueClose?.();
+    else this.activityChipClear();
+  }
+  /** Number keys 1–6 pick a dialogue choice while a conversation is open. */
+  pickDialogue(index: number) {
+    if (!this.dialogueOpen) return false;
+    const btns = $$('#dlgChoices .dlgChoice');
+    const b = btns[index];
+    if (b && !b.classList.contains('off')) { b.click(); return true; }
+    return true; // conversation open: swallow the key
+  }
+
+  /** Small chip above the needs showing what the character is doing right now. */
+  activityChip(text: string, icon = '💬') {
+    if (!text) { this.activityChipClear(); return; }
+    $('#actChipIcon').textContent = icon;
+    $('#actChipText').textContent = text;
+    $('#actChip').classList.remove('hidden');
+  }
+  activityChipClear() { $('#actChip').classList.add('hidden'); }
   /** Shared city clock (top bar). */
   clock(text: string, night: boolean) { const el = $('#clock'); if (el.textContent !== text) el.textContent = text; document.body.classList.toggle('night', night); }
   /** Driving overlay: speed + park button. */

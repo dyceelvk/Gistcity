@@ -42,6 +42,7 @@
         <div class="need" data-level="ok"><span>⚡</span><i><b id="needEnergy"></b></i></div>
         <div class="need" data-level="ok"><span>❤️</span><i><b id="needHealth"></b></i></div>
       </div>
+      <div class="actChip hidden" id="actChip"><span id="actChipIcon">💬</span><strong id="actChipText"></strong></div>
     </div>
 
     <!-- right column -->
@@ -75,6 +76,16 @@
     <div class="sleep hidden" id="sleep"><div class="sleepCard"><strong>Sleeping…</strong><p>Energy <span id="sleepEnergy">0%</span></p><i class="sleepBar"><b id="sleepFill"></b></i><button class="primary" id="wakeBtn">WAKE UP</button></div></div>
     <!-- small input dialog -->
     <div class="ask hidden" id="ask"><div class="askCard"><strong id="askTitle"></strong><p class="muted" id="askHint"></p><input id="askInput" inputmode="numeric" autocomplete="off" /><div class="askRow"><button class="ghost" id="askCancel">Cancel</button><button class="primary" id="askOk">SEND</button></div></div></div>
+
+    <!-- conversation: the other side's line + real response choices (keys 1-6) -->
+    <div class="dialogue hidden" id="dialogue">
+      <div class="dlgHead"><div class="avatarMini" id="dlgAvatar">?</div><div><small id="dlgRole">CITIZEN</small><strong id="dlgName"></strong></div><button class="ghost dlgX" id="dlgClose" aria-label="End conversation">×</button></div>
+      <p class="dlgLine" id="dlgLine"></p>
+      <div class="dlgChoices" id="dlgChoices"></div>
+    </div>
+
+    <!-- private changing area: a curtain of privacy while the style studio is open -->
+    <div class="changing hidden" id="changing"><div class="changingTag">🔒 <strong>CHANGING ROOM</strong><span>Private — only you can see this</span></div></div>
 
     <!-- timing minigame -->
     <div class="minigame hidden" id="minigame">

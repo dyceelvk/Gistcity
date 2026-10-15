@@ -11,7 +11,7 @@ import { Input } from './input';
 import { resolveCircle } from './physics';
 import { buildWorld, buildSky, type World, type Zone, type Seat } from './world';
 import { buildInterior, BED_SPOT, type Interior } from './interior';
-import { NpcManager, GIST_LINES } from './npc';
+import { NpcManager, type Npc } from './npc';
 import { JobSystem, makeMarker, animateMarker, type JobId } from './jobs';
 import { Store, defaultState, ACHIEVEMENTS, fmtG, type PlayerState } from './state';
 import { CONSUMABLES, type Consumable } from './catalog';
@@ -26,6 +26,8 @@ import { VehicleManager, TrafficManager, handlingOf } from './vehicles';
 import { trafficLoops } from './civic';
 import { makeSociety, type Society, type VehicleView } from '../net/society';
 import { SocietyPanels, AREA_LABEL, type SocietyHost } from '../ui/society-ui';
+import { ActivityMachine } from './activity';
+import { npcConversation, citizenConversation, type Conversation, type DialogueChoice } from './dialogue';
 
 const WALK = 3.3, RUN = 6.4, RADIUS = 0.38;
 
@@ -101,6 +103,22 @@ export class Game implements HudHost, SocietyHost {
   private bumpCool = 0;
   private lastClock = '';
   private churchSeat: number | null = null;
+  // activity state machine + conversations
+  private act = new ActivityMachine();
+  private talking: {
+    kind: 'npc' | 'player';
+    id: string;
+    name: string;
+    npc?: Npc | null;
+    remote?: Remote | null;
+    convo: Conversation;
+    roundChoices: DialogueChoice[];
+  } | null = null;
+  private myBubble: THREE.Sprite | null = null;
+  private myBubbleUntil = 0;
+  private lastChip = '';
+  /** Total simulated seconds (clamped dt) — debugging & tests; unlike Clock.elapsedTime it survives slow frames. */
+  simSeconds = 0;
 
   constructor(host: HTMLElement, boot: Boot) {
     this.store = new Store(boot.state);
@@ -173,8 +191,21 @@ export class Game implements HudHost, SocietyHost {
     this.panels = new SocietyPanels(this); this.hud.panels = this.panels;
     this.hud.setTouch(touch);
     this.hud.onAction = (i) => this.runAction(i);
-    this.input.onInteract = () => { if (!this.hud.isOpen) this.runAction(0); };
-    this.input.onAction = (i) => { if (!this.hud.isOpen) this.runAction(i); };
+    this.input.onInteract = () => {
+      if (this.hud.dialogueOpen) return;
+      if (!this.hud.isOpen) this.runAction(0);
+    };
+    this.input.onAction = (i) => {
+      if (this.hud.dialogueOpen) { this.hud.pickDialogue(i); return; }
+      if (!this.hud.isOpen) this.runAction(i);
+    };
+    // conversations: responses from the player, ending the chat, changing-room state
+    this.hud.onDialogueChoice = (i) => this.pickDialogue(i);
+    this.hud.onDialogueClose = () => this.endConversation();
+    this.hud.onPanel = (id) => {
+      if (id === 'style' && !this.creating && this.act.enter('CHANGING_CLOTHES')) { /* curtain shown by the HUD */ }
+      else if (id === null && this.act.current === 'CHANGING_CLOTHES') this.act.endAll();
+    };
     this.input.onEscape = () => this.hud.closeAll();
     this.input.onToggleRun = () => this.hud.setRun(this.input.runToggle);
     document.getElementById('runBtn')!.addEventListener('click', () => { this.input.runToggle = !this.input.runToggle; this.hud.setRun(this.input.runToggle); });
@@ -191,6 +222,7 @@ export class Game implements HudHost, SocietyHost {
     // cloud: other players, greetings
     cloud.onRemote = (players) => this.syncRemotes(players);
     cloud.onWave = (from) => { this.hud.toast(`${from.name} waved at you 👋`); const r = this.remotesMap.get(from.id); if (r) this.bubble(r, '👋'); };
+    cloud.onSay = (from) => this.hearSay(from);
     if (cloud.signedIn) cloud.joinCity(() => ({ name: this.store.state.name, username: this.store.state.username, appearance: this.store.state.appearance }));
     cloud.onStatus = (st) => { this.hud.cloudStatus(st); if (st === 'guest') { this.hud.toast('Signed out'); setTimeout(() => location.reload(), 600); } };
 
@@ -302,8 +334,12 @@ export class Game implements HudHost, SocietyHost {
     if (this.busy) return;
     this.hud.closeAll();
     this.activityLabel = 'on a government shift';
+    this.act.enter('WORKING');
+    this.pushActivityChip();
     const served = await this.runMinigame(5, 'Secretariat desk — tap in the green zone to serve each citizen', 'Served ✓', 'Form rejected — next!');
     this.activityLabel = '';
+    if (this.act.current === 'WORKING') this.act.end();
+    this.pushActivityChip();
     if (served < 3) { this.hud.toast(`${served}/5 citizens served. Serve at least 3 to be paid for the shift.`, 4000); this.hud.open('gov'); return; }
     const r = await this.society.govWorkShift();
     if (!r.ok) { this.hud.toast(r.message ?? 'The shift could not be recorded'); this.hud.open('gov'); return; }
@@ -396,16 +432,20 @@ export class Game implements HudHost, SocietyHost {
       run: () => void this.consume(c),
     });
     switch (z.id) {
-      case 'npc': { const npc = this.npcs.nearest(pos, 2.4); return npc ? [{ icon: '💬', label: `Gist with ${npc.name}`, run: () => this.gistWith(npc) }] : []; }
+      case 'npc': { const npc = this.npcs.nearest(pos, 2.4); return npc ? [{ icon: '💬', label: `Gist with ${npc.name}`, run: () => this.startNpcTalk(npc) }] : []; }
       case 'player': {
         const r = z.data && (z.data as any).remote as Remote | undefined; if (!r) return [];
         return [
+          { icon: '💬', label: `Talk to ${r.state.name}`, run: () => this.startPlayerTalk(r) },
           { icon: '👋', label: `Greet ${r.state.name}`, run: () => { cloud.wave(r.state.id, s.name); this.bubble(r, '👋'); this.hud.toast(`You waved at ${r.state.name}`); this.store.update((st) => { if (!this.greeted.has(r.state.id)) { this.greeted.add(r.state.id); st.stats.popularity += 1; st.stats.xp += 5; } }); } },
           { icon: '👤', label: 'View profile', run: () => void this.hud.showProfile(r.state.id, r.state.name) },
           { icon: '💸', label: 'Send G', run: () => void this.sendGift(r) },
         ];
       }
-      case 'store': return [{ icon: '👕', label: 'Browse GIST Fits', run: () => { this.visit('store'); this.hud.open('store'); } }];
+      case 'store': return [
+        { icon: '👕', label: 'Browse GIST Fits', run: () => { this.visit('store'); this.hud.open('store'); } },
+        { icon: '👗', label: 'Use the changing room', run: () => { this.visit('store'); this.hud.open('style'); } },
+      ];
       case 'vehicle': {
         const v = (z.data as any)?.vehicle as VehicleView | undefined; if (!v) return [];
         const canDrive = v.mine || v.keys.includes(this.store.state.username);
@@ -428,7 +468,7 @@ export class Game implements HudHost, SocietyHost {
       case 'jobs': return [{ icon: '💼', label: 'Check the job board', run: () => { this.visit('jobs'); this.hud.open('jobs'); } }];
       case 'home': return [{ icon: '🏠', label: 'Go inside', run: () => { this.visit('home'); this.enterApartment(); } }];
       case 'exit': return [{ icon: '🚪', label: 'Step outside', run: () => this.exitApartment() }];
-      case 'wardrobe': return [{ icon: '👗', label: 'Open wardrobe', run: () => this.hud.open('style') }];
+      case 'wardrobe': return [{ icon: '👗', label: 'Open wardrobe (private changing)', run: () => this.hud.open('style') }];
       case 'decor': return [{ icon: '🛋️', label: 'Decorate your space', run: () => this.hud.open('home') }];
       case 'suya': this.visit('suya'); return CONSUMABLES.filter((c) => c.vendor === 'suya').map(order);
       case 'buka': this.visit('buka'); return CONSUMABLES.filter((c) => c.vendor === 'buka').map(order);
@@ -456,24 +496,46 @@ export class Game implements HudHost, SocietyHost {
     this.refreshActions();
   }
   private refreshActions() {
+    if (this.talking) { this.hud.actions(null, []); return; }
     this.currentActions = this.actionsFor(this.currentZone);
     this.hud.actions(this.currentZone, this.currentActions);
   }
+  /** Order and consume: a real EATING / DRINKING sequence with visible effects over time. */
   private async consume(c: Consumable) {
     if (this.busy) return;
     this.busy = true;
     const r = await this.economy.buy(c.id);
-    this.busy = false;
-    if (!r.ok) { this.hud.toast(r.message ?? 'Could not order'); this.refreshActions(); return; }
+    if (!r.ok) { this.busy = false; this.hud.toast(r.message ?? 'Could not order'); this.refreshActions(); return; }
     const fx = (r.effects ?? c.effects) as Record<string, number>;
+    const isDrink = c.kind === 'drink', isService = c.kind === 'service';
+    const dur = isService ? 1.6 : isDrink ? 2.8 : 3.6;
+    const state = isService ? 'INTERACTING' : isDrink ? 'DRINKING' : 'EATING';
+    this.activityLabel = c.name.toLowerCase();
+    this.act.enter(state, dur);
+    this.pushActivityChip();
+    this.hud.toast(`${c.icon} ${isService ? 'Enjoying' : isDrink ? 'Drinking' : 'Eating'} ${c.name}…`, Math.round(dur * 1000));
+    this.hud.emote(isService ? '🪩' : isDrink ? '🥤' : '😋');
+    // needs recover through the sequence, so the bars move while you eat / drink
+    const steps = 3;
+    for (let i = 0; i < steps; i++) {
+      await new Promise((res) => setTimeout(res, (dur * 1000) / steps));
+      this.store.update((s) => {
+        needs.apply(s.needs, {
+          hunger: (fx.hunger ?? 0) / steps, thirst: (fx.thirst ?? 0) / steps,
+          energy: (fx.energy ?? 0) / steps, health: (fx.health ?? 0) / steps,
+        });
+      });
+      this.hud.needs(this.store.state.needs);
+    }
     this.store.update((s) => {
-      needs.apply(s.needs, fx);
       s.stats.popularity += fx.popularity ?? 0; s.stats.reputation += fx.reputation ?? 0; s.stats.xp += fx.xp ?? 0;
     });
-    this.hud.needs(this.store.state.needs);
+    if (this.act.current === state) this.act.end();
+    this.activityLabel = '';
+    this.pushActivityChip();
     this.hud.toast(`${c.line}${fx.hunger ? ` · hunger +${fx.hunger}` : ''}${fx.thirst ? ` · thirst +${fx.thirst}` : ''}${fx.popularity ? ` · +${fx.popularity} popularity` : ''}`, 3500);
-    this.hud.emote(c.kind === 'service' ? '🪩' : c.kind === 'drink' ? '🥤' : '😋');
-    if (c.kind !== 'service') this.award('well-fed');
+    if (!isService) this.award('well-fed');
+    this.busy = false;
     this.refreshActions();
   }
   private playPitch() {
@@ -491,16 +553,129 @@ export class Game implements HudHost, SocietyHost {
     const res = await this.economy.gift(r.state.username, n, `gift from ${this.store.state.name}`);
     this.hud.toast(res.ok ? `Sent ${fmtG(n)} to ${r.state.name} 💸` : (res.message ?? 'Transfer failed'));
   }
-  private gistWith(npc: NonNullable<ReturnType<NpcManager['nearest']>>) {
-    const line = GIST_LINES[Math.floor(Math.random() * GIST_LINES.length)];
+  /* ------------------------------------------------------ conversations */
+
+  /** Talk to an NPC: a real conversation where every prompt has a response. */
+  private startNpcTalk(npc: Npc) {
+    if (this.talking) return;
+    this.hud.closeAll();
+    const convo = npcConversation(npc.name);
     this.npcs.faceTowards(npc, this.avatar.root.position);
-    this.npcs.say(npc, line);
-    if (!this.greeted.has(npc.name)) {
-      this.greeted.add(npc.name);
-      this.store.update((s) => { s.stats.popularity += 1; s.stats.xp += 5; });
-      this.hud.toast(`You gisted with ${npc.name} · +1 popularity`);
-      if (this.greeted.size >= 10) this.award('socialite');
+    this.npcs.say(npc, convo.opening, 10);
+    this.talking = { kind: 'npc', id: npc.name, name: npc.name, npc, convo, roundChoices: convo.choices };
+    this.act.enter('TALKING');
+    this.hud.actions(null, []);
+    this.hud.showDialogue(convo.name, convo.role, convo.opening, convo.choices);
+    this.pushActivityChip();
+  }
+
+  /** Talk to another player in the city — they answer for themselves, in real time. */
+  private startPlayerTalk(r: Remote, firstLine?: string) {
+    if (this.talking && !(this.talking.kind === 'player' && this.talking.id === r.state.id)) this.endConversation();
+    this.hud.closeAll();
+    const convo = citizenConversation(r.state.name, firstLine);
+    this.talking = { kind: 'player', id: r.state.id, name: r.state.name, remote: r, convo, roundChoices: convo.choices };
+    this.act.enter('TALKING');
+    this.hud.actions(null, []);
+    this.hud.showDialogue(convo.name, convo.role, convo.opening, convo.choices);
+    this.pushActivityChip();
+  }
+
+  /** A spoken line from another player arrives (their response — or a new conversation). */
+  private hearSay(from: { id: string; name: string; text: string }) {
+    const r = this.remotesMap.get(from.id);
+    if (r) this.bubble(r, from.text);
+    this.hud.toast(`${from.name}: “${from.text}”`, 5500);
+    if (this.talking?.kind === 'player' && this.talking.id === from.id) {
+      this.hud.dialogueLine(`“${from.text}”`);
+      this.hud.dialogueChoices(this.talking.roundChoices);
+    } else if (r) {
+      this.startPlayerTalk(r, from.text);
     }
+  }
+
+  /** The player picked a conversation response. */
+  private pickDialogue(i: number) {
+    const t = this.talking;
+    if (!t) return;
+    const c = t.roundChoices[i];
+    if (!c) { this.endConversation(); return; }
+    this.sayBubble(c.say);
+    if (t.kind === 'npc' && t.npc) {
+      this.npcs.faceTowards(t.npc, this.avatar.root.position);
+      if (!this.greeted.has(t.id)) {
+        this.greeted.add(t.id);
+        this.store.update((st) => { st.stats.popularity += 1; st.stats.xp += 5; });
+        if (this.greeted.size >= 10) this.award('socialite');
+      }
+      if (c.effect) {
+        const pop = c.effect.popularity ?? 0, xp = c.effect.xp ?? 0;
+        if (pop || xp) this.store.update((st) => { st.stats.popularity += pop; st.stats.xp += xp; });
+        if (c.effect.tip) this.hud.toast(c.effect.tip, 5500);
+      }
+      if (c.close) { this.npcs.say(t.npc, c.response || 'No wahala.', 3); this.endConversation(); return; }
+      const line = c.then?.line ? `${c.response} ${c.then.line}` : (c.response || 'No wahala.');
+      this.npcs.say(t.npc, line, 10);
+      this.hud.dialogueLine(line);
+      t.roundChoices = c.then?.choices ?? [{ icon: '🚶', label: 'Walk away', say: 'Take care!', response: '', close: true }];
+      this.hud.dialogueChoices(t.roundChoices);
+    } else {
+      // player ↔ player: broadcast my line; their reply comes back over the realtime channel
+      if (t.remote) {
+        cloud.say(t.remote.state.id, this.store.state.name, c.say);
+        if (c.close) { this.endConversation(); return; }
+        this.hud.dialogueLine('You said it — waiting for their reply (they answer on their side).');
+      } else if (c.close) { this.endConversation(); return; }
+      t.roundChoices = t.convo.choices;
+      this.hud.dialogueChoices(t.roundChoices);
+    }
+  }
+
+  /** End the running conversation (walked away, ×, or it finished). */
+  private endConversation() {
+    if (!this.talking && !this.hud.dialogueOpen) return;
+    this.talking = null;
+    if (this.act.current === 'TALKING') this.act.endAll();
+    this.hud.closeDialogue(false);
+    this.pushActivityChip();
+    this.refreshActions();
+  }
+
+  /** A speech bubble over my own character. */
+  private sayBubble(text: string) {
+    if (this.myBubble) this.avatar.root.remove(this.myBubble);
+    this.myBubble = makeSprite(text, { scale: 0.8, bg: 'rgba(165,255,56,0.92)', fg: '#0b0e0c' });
+    this.myBubble.position.y = 2.55;
+    this.avatar.root.add(this.myBubble);
+    this.myBubbleUntil = performance.now() + 3200;
+  }
+
+  /** Combined activity string for the HUD chip and the presence broadcast. */
+  private activityString(): string {
+    const base = this.act.label();
+    if (!base) return this.activityLabel;
+    return this.activityLabel ? `${base} ${this.activityLabel}` : base;
+  }
+  private chipIcon(): string {
+    switch (this.act.current) {
+      case 'EATING': return '🍛';
+      case 'DRINKING': return '🥤';
+      case 'SLEEPING': return '😴';
+      case 'DRIVING': return '🚗';
+      case 'TALKING': return '💬';
+      case 'SITTING': return '🪑';
+      case 'CHANGING_CLOTHES': return '👗';
+      case 'WORKING': return '💼';
+      default: return '✦';
+    }
+  }
+  private pushActivityChip() {
+    // the chip shows real activity states; bare location notes only go to presence
+    const s = this.act.label() ? this.activityString() : '';
+    if (s === this.lastChip) return;
+    this.lastChip = s;
+    if (s) this.hud.activityChip(s, this.chipIcon());
+    else this.hud.activityChipClear();
   }
   private bubble(r: Remote, text: string) {
     if (r.bubble) r.avatar.root.remove(r.bubble);
@@ -520,19 +695,24 @@ export class Game implements HudHost, SocietyHost {
   }
   private sitOn(seat: Seat) {
     if (this.jobs.active) { this.hud.toast('Finish or cancel your hustle first.'); return; }
+    if (!this.act.enter('SITTING')) { this.hud.toast('Finish what you are doing first.'); return; }
     this.seated = seat;
     this.velocity.set(0, 0, 0);
     this.avatar.root.position.set(seat.x, 0, seat.z);
     this.yaw = seat.yaw; this.avatar.root.rotation.y = seat.yaw;
     this.avatar.setPose?.('sit');
     this.rootY = seat.h - (this.avatar.hipHeight ?? 0.86);
+    this.pushActivityChip();
     this.hud.toast('Taking a seat. Push the stick or press 1 to stand up.');
   }
   private stopSitting() {
     if (!this.seated) return;
     const seat = this.seated; this.seated = null;
+    this.velocity.set(0, 0, 0);
     if (this.lesson) { this.lesson = null; this.hud.toast('You left before the lesson ended — it does not count.'); this.defaultObjective(); }
     if (this.activityLabel.startsWith('at ') || this.activityLabel === 'in class') this.activityLabel = '';
+    this.act.endAll();
+    this.pushActivityChip();
     this.avatar.setPose?.('none');
     this.rootY = 0;
     // step forward off the seat so we don't stand inside the bench collider
@@ -542,6 +722,7 @@ export class Game implements HudHost, SocietyHost {
   private bedExit = { x: BED_SPOT.x, z: BED_SPOT.z + 1.5 };
   private sleepOn(bedTop: number, z?: Zone) {
     if (this.jobs.active) { this.hud.toast('Finish or cancel your hustle first.'); return; }
+    if (!this.act.enter('SLEEPING')) { this.hud.toast('Finish what you are doing first.'); return; }
     this.sleeping = { bedTop };
     this.velocity.set(0, 0, 0);
     if (z?.data?.bedX !== undefined && z.data.bedZ !== undefined) {
@@ -549,7 +730,7 @@ export class Game implements HudHost, SocietyHost {
       const by = z.data.bedYaw ?? 0;
       this.avatar.root.position.set(z.data.bedX + Math.sin(by) * 0.85, 0, z.data.bedZ + Math.cos(by) * 0.85);
       this.yaw = by; this.bedExit = { x: z.x, z: z.z };
-      this.activityLabel = 'resting in the hospital ward';
+      this.activityLabel = 'in the hospital ward';
     } else {
       this.avatar.root.position.set(BED_SPOT.x, 0, BED_SPOT.z + 0.85); // root = feet; body extends toward the wall
       // face up: yaw 0 (+z) then −90° about X puts the face toward +y and the head toward the wall (−z)
@@ -565,6 +746,9 @@ export class Game implements HudHost, SocietyHost {
   private stopSleeping(auto: boolean) {
     if (!this.sleeping) return;
     this.sleeping = null;
+    this.velocity.set(0, 0, 0);
+    this.act.endAll();
+    this.pushActivityChip();
     this.avatar.setPose?.('none');
     this.avatar.root.rotation.x = 0; this.avatar.root.position.y = 0; this.rootY = 0;
     this.avatar.root.position.set(this.bedExit.x, 0, this.bedExit.z);
@@ -666,10 +850,13 @@ export class Game implements HudHost, SocietyHost {
   private enterVehicle(id: string) {
     if (this.jobs.active) { this.hud.toast('Finish or cancel your hustle first.'); return; }
     const d = this.vehicles.enter(id); if (!d) { this.hud.toast('That car is not here any more.'); return; }
+    if (!this.act.enter('DRIVING')) { this.vehicles.exit(); this.hud.toast('Finish what you are doing first.'); return; }
+    this.endConversation();
     this.avatar.root.visible = false;
     this.velocity.set(0, 0, 0);
     this.rig.dist = 9; this.rig.pitch = 0.32;
-    this.activityLabel = `driving a ${d.view.name}`;
+    this.activityLabel = `a ${d.view.name}`;
+    this.pushActivityChip();
     this.hud.drive(true, 0, d.view.name);
     this.hud.toast('Push forward to drive, sideways to steer. Stop and press E (or PARK) to get out.', 4000);
     this.award('driver');
@@ -679,6 +866,9 @@ export class Game implements HudHost, SocietyHost {
     const d = this.vehicles.driving; if (!d) return;
     if (Math.abs(d.speed) > 0.6) { this.hud.toast('Stop the car first.'); return; }
     const out = this.vehicles.exit(); if (!out) return;
+    this.act.endAll();
+    this.activityLabel = '';
+    this.pushActivityChip();
     this.avatar.root.visible = true;
     this.avatar.root.position.set(out.x, 0, out.z);
     this.yaw = out.yaw; this.avatar.root.rotation.y = this.yaw;
@@ -751,7 +941,13 @@ export class Game implements HudHost, SocietyHost {
   }
 
   private frame() {
-    const dt = Math.min(this.clock.getDelta(), 0.05);
+    // Real-time simulation down to ~4 fps: keep dt honest and substep the
+    // physics instead of clamping into slow motion (that is what made walk /
+    // drive feel wrong on slower devices).
+    const dt = Math.min(this.clock.getDelta(), 0.25);
+    const substeps = Math.max(1, Math.min(5, Math.ceil(dt / 0.05)));
+    const subDt = dt / substeps;
+    this.simSeconds += dt;
     const t = this.clock.elapsedTime;
     const pos = this.avatar.root.position;
     const scene = this.indoor ? this.scenes[this.areaId as Exclude<Area, 'city'>] : null;
@@ -764,6 +960,16 @@ export class Game implements HudHost, SocietyHost {
     this.needsTimer += dt;
     if (this.needsTimer > 20) { this.needsTimer = 0; this.store.dirty = true; }
     if (this.sleeping) { this.hud.sleep(true, s.needs.energy); if (s.needs.energy >= 100) this.stopSleeping(true); }
+
+    // activity state machine: timed sequences end themselves; hustles run as a WORKING overlay
+    this.act.update();
+    if (this.jobs.active && this.act.current !== 'WORKING' && this.act.canEnter('WORKING')) this.act.enter('WORKING');
+    else if (!this.jobs.active && this.act.current === 'WORKING') this.act.end();
+    this.pushActivityChip();
+    if (this.myBubble && this.myBubbleUntil && performance.now() > this.myBubbleUntil) {
+      this.avatar.root.remove(this.myBubble);
+      this.myBubble = null;
+    }
 
     // shared day/night + clock
     if (this.day.update(this.indoor)) { const c = fmtHour(this.day.state.hour); if (c !== this.lastClock) { this.lastClock = c; this.hud.clock(c, this.day.state.night); } }
@@ -782,7 +988,11 @@ export class Game implements HudHost, SocietyHost {
       const ax = frozenD ? { x: 0, y: 0 } : this.input.axis();
       const statics = this.world.colliders.concat(this.vehicles.colliders());
       const others = this.traffic.circles().concat(this.vehicles.remoteCircles());
-      const { bumped } = this.vehicles.drive(dt, ax, statics, this.world.bounds, others);
+      let bumped = false;
+      for (let i = 0; i < substeps; i++) {
+        const r = this.vehicles.drive(subDt, ax, statics, this.world.bounds, others);
+        if (r.bumped) bumped = true;
+      }
       this.bumpCool -= dt;
       if (bumped && this.bumpCool <= 0) { this.bumpCool = 2; this.hud.toast('Oya, careful! 🚗💥'); this.store.update((st) => { st.stats.reputation = Math.max(0, st.stats.reputation - 1); }); }
       pos.set(driving.x, 0, driving.z); this.yaw = driving.yaw;
@@ -793,7 +1003,7 @@ export class Game implements HudHost, SocietyHost {
       for (const fn of this.world.animated) fn(dt, t);
       this.hud.district(this.districtName(pos.x, pos.z));
       this.updateRemotes(dt);
-      if (cloud.signedIn) cloud.broadcastPos(pos.x, pos.z, this.yaw, Math.abs(driving.speed) > 0.5 ? 2 : 0, false, 'none', 'city', { model: driving.view.model_id, color: driving.view.color }, this.activityLabel);
+      if (cloud.signedIn) cloud.broadcastPos(pos.x, pos.z, this.yaw, Math.abs(driving.speed) > 0.5 ? 2 : 0, false, 'none', 'city', { model: driving.view.model_id, color: driving.view.color }, this.activityString());
       if (this.store.dirty) { this.store.dirty = false; void cloud.save(this.store.state); this.pushPresence(); }
       if (this.currentActions.length !== 1) this.refreshActions();
       const so = this.day.sunOffset(); this.sun.position.set(pos.x + so.x, so.y, pos.z + so.z); this.sun.target.position.copy(pos); this.sun.target.updateMatrixWorld();
@@ -810,8 +1020,10 @@ export class Game implements HudHost, SocietyHost {
     if (this.input.touch) this.hud.setTouch(true);
 
     // movement (camera-relative), frozen while a panel, a minigame, a seat or a bed holds the player
-    const frozen = this.hud.isOpen || this.busy || this.sleeping;
+    const frozen = this.hud.isOpen || this.busy || this.sleeping || this.act.freezeMovement;
     const axis = frozen ? { x: 0, y: 0, mag: 0 } : this.input.axis();
+    // walking away ends a conversation
+    if (this.talking && axis.mag > 0.35) this.endConversation();
     if (this.seated && axis.mag > 0.4) this.stopSitting();
     const running = this.input.running && axis.mag > 0.6;
     const targetSpeed = this.seated ? 0 : axis.mag > 0.05 ? (running ? RUN : WALK) * Math.min(1, axis.mag * 1.2) * needs.speedFactor(s.needs) : 0;
@@ -819,13 +1031,14 @@ export class Game implements HudHost, SocietyHost {
     const dir = new THREE.Vector3().addScaledVector(fwd, axis.y).addScaledVector(right, axis.x);
     if (dir.lengthSq() > 0) dir.normalize();
     const desired = dir.multiplyScalar(targetSpeed);
-    this.velocity.lerp(desired, Math.min(1, dt * 10));
-    const speed = this.seated || this.sleeping ? 0 : this.velocity.length();
-    if (speed > 0.05) {
+    if (!this.seated && !this.sleeping && (targetSpeed > 0.05 || this.velocity.lengthSq() > 0.002)) {
       const before = pos.clone();
-      pos.addScaledVector(this.velocity, dt);
-      if (!this.indoor) { pos.x = THREE.MathUtils.clamp(pos.x, -this.world.bounds, this.world.bounds); pos.z = THREE.MathUtils.clamp(pos.z, -this.world.bounds, this.world.bounds); }
-      resolveCircle(pos, RADIUS, colliders);
+      for (let i = 0; i < substeps; i++) {
+        this.velocity.lerp(desired, Math.min(1, subDt * 10));
+        pos.addScaledVector(this.velocity, subDt);
+        if (!this.indoor) { pos.x = THREE.MathUtils.clamp(pos.x, -this.world.bounds, this.world.bounds); pos.z = THREE.MathUtils.clamp(pos.z, -this.world.bounds, this.world.bounds); }
+        resolveCircle(pos, RADIUS, colliders);
+      }
       this.walked += pos.distanceTo(before);
       if (this.walked > 12) this.award('first-steps');
       const targetYaw = Math.atan2(this.velocity.x, this.velocity.z);
@@ -833,6 +1046,7 @@ export class Game implements HudHost, SocietyHost {
       this.yaw += diff * Math.min(1, dt * 12);
       this.avatar.root.rotation.y = this.yaw;
     }
+    const speed = this.seated || this.sleeping ? 0 : this.velocity.length();
     // vertical placement for furniture: seat height / lying on the bed
     if (this.sleeping) {
       const ty = this.sleeping.bedTop + 0.1;
@@ -843,6 +1057,7 @@ export class Game implements HudHost, SocietyHost {
       if (this.avatar.root.rotation.x !== 0) this.avatar.root.rotation.x *= Math.max(0, 1 - dt * 8);
     }
     this.avatar.animate(dt, speed < 0.1 ? 0 : speed > (WALK + RUN) / 2 ? 2 : 1, speed);
+    this.act.locomotion(speed, speed > (WALK + RUN) / 2);
 
     // zones → contextual actions
     const zones = scene ? scene.zones : this.world.zones;
@@ -870,7 +1085,7 @@ export class Game implements HudHost, SocietyHost {
 
     // remote players
     this.updateRemotes(dt);
-    if (cloud.signedIn) cloud.broadcastPos(pos.x, pos.z, this.yaw, speed < 0.1 ? 0 : speed > (WALK + RUN) / 2 ? 2 : 1, this.indoor, this.pose, this.areaId, null, this.activityLabel);
+    if (cloud.signedIn) cloud.broadcastPos(pos.x, pos.z, this.yaw, speed < 0.1 ? 0 : speed > (WALK + RUN) / 2 ? 2 : 1, this.indoor, this.pose, this.areaId, null, this.activityString());
     if (this.store.dirty) { this.store.dirty = false; void cloud.save(this.store.state); this.pushPresence(); }
 
     // sun follows the player so the shadow map stays sharp; direction from the shared clock

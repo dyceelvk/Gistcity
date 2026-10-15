@@ -77,6 +77,8 @@ class Cloud {
   onStatus: ((s: CloudStatus) => void) | null = null;
   onRemote: ((players: Map<string, RemoteState>) => void) | null = null;
   onWave: ((from: { id: string; name: string }) => void) | null = null;
+  /** A spoken line from another player in a conversation (their reply). */
+  onSay: ((from: { id: string; name: string; text: string }) => void) | null = null;
   onRecovery: (() => void) | null = null;
   remote = new Map<string, RemoteState>();
   private lastSent = 0;
@@ -317,6 +319,10 @@ class Cloud {
       const p = payload as { from: string; name: string; to: string };
       if (p.to === this.user?.id) this.onWave?.({ id: p.from, name: p.name });
     });
+    ch.on('broadcast', { event: 'say' }, ({ payload }) => {
+      const p = payload as { from: string; name: string; to: string; text: string };
+      if (p.to === this.user?.id) this.onSay?.({ id: p.from, name: p.name, text: String(p.text ?? '').replace(/[<>]/g, '').slice(0, 160) });
+    });
     ch.subscribe(async (status) => {
       if (status === 'SUBSCRIBED') await ch.track(me()); // also re-runs after an automatic reconnect
     });
@@ -336,6 +342,11 @@ class Cloud {
   wave(toId: string, myName: string) {
     if (!this.channel || !this.user) return;
     void this.channel.send({ type: 'broadcast', event: 'wave', payload: { from: this.user.id, name: myName, to: toId } });
+  }
+  /** Speak a line in a conversation with another player (they can reply the same way). */
+  say(toId: string, myName: string, text: string) {
+    if (!this.channel || !this.user) return;
+    void this.channel.send({ type: 'broadcast', event: 'say', payload: { from: this.user.id, name: myName, to: toId, text: String(text).replace(/[<>]/g, '').slice(0, 160) } });
   }
   leaveCity() { if (this.channel) { void this.client?.removeChannel(this.channel); this.channel = null; } this.remote.clear(); this.onRemote?.(this.remote); }
 }

@@ -106,3 +106,53 @@ anything not listed under **Implemented** is not built yet.
 **Verified headless (Chromium, SwiftShader, practice mode)** — enrol → 3 classes → exam → `graduate` achievement → licence; dealer refuses unlicensed buyers, sells once licensed (`wheels` achievement, car spawns parked at the dealer); enter / drive / park gating ("stop the car first"); hospital treatment debits 2,500 G and heals; church join; government employment desk; presence/vehicle panels; day/dusk/night lighting; mobile (Pixel 7 emulation): 153 draw calls / 128k triangles, desktop city 300 calls / 185k triangles (was 855 calls before batching).
 
 **Not verified** — against a live Supabase project (migrations not yet applied: no access token was available); driving *feel* on a real phone (headless runs at ~3 fps); government salaries are paid per worked shift (`gov_work_shift`), not by a scheduled payroll run yet.
+
+## 8. Phase 1 — core gameplay repair & human behaviour (this commit)
+
+**Defects found by the new headless gameplay test** (`scripts/game-smoke.mjs`, 38 checks):
+- **Slow-motion at low frame rates.** `frame()` clamped `dt` to 0.05 s (20 fps floor), so on
+  weaker devices the whole simulation ran in slow motion — characters crawled, cars barely
+  moved. This is the "they don't walk or run like a human / can't drive" symptom.
+  **Fixed:** `dt` is now honest down to ~4 fps (clamp 0.25 s) and the movement / vehicle
+  physics run in ≤5 substeps of 0.05 s so collisions stay stable at any frame rate.
+- **Momentum leak while asleep / seated** (found by writing the "no walking while sleeping"
+  assertion): the new integration path could apply leftover velocity. Guarded, and
+  `stopSitting` / `stopSleeping` now clear velocity.
+- Interactions showed a menu but **nothing ever responded**: `gistWith()` printed one canned
+  NPC line with no way to answer.
+
+**Implemented**
+- `src/game/activity.ts` — explicit activity state machine
+  (IDLE / WALKING / RUNNING / SITTING / EATING / DRINKING / SLEEPING / WORKING /
+  DRIVING / TALKING / CHANGING_CLOTHES / INTERACTING) with compatibility rules
+  (no walking while sleeping, no driving outside a car, eating keeps your seat,
+  WORKING overlays locomotion for hustles), timed sequences that end themselves,
+  and an activity chip in the HUD + presence broadcast.
+- `src/game/dialogue.ts` + HUD dialogue card + `cloud.say` realtime channel:
+  NPC conversations with **real response choices** (personas for traders, area youth,
+  officials, church members, mechanics — 2-round exchanges, city tips, popularity/xp),
+  player ↔ player talk with quick replies where **both sides respond** (their reply
+  arrives live over the channel, shows as a speech bubble + toast).
+- Paced EATING / DRINKING / INTERACTING sequences (2–4 s) with needs bars visibly
+  recovering through the sequence instead of instant teleport-style effects.
+- Private changing room: the wardrobe and the new GIST Fits changing booth curtain the
+  world while the Style Studio is open (CHANGING_CLOTHES). Per the brief's safety rules
+  this is privacy-realism, **not** explicit anatomy.
+- Sit / sleep / drive / wake / park all report through the state machine; presence and
+  the HUD chip show what the character is doing ("driving a Toks Corolla 2012" …).
+
+**Tests performed** — `node scripts/game-smoke.mjs` (headless Chromium + SwiftShader,
+practice mode): **38/38 pass** — boot & realistic GLB character; walk 3.3 m/s with walk
+anim; run with run anim; natural stop → idle; no walking through solid objects;
+sit/stand; EATING sequence (cash −500, hunger +15); DRINKING sequence; sleep (lying pose,
+energy recovers, cannot walk while asleep, clean wake); buy car → enter (DRIVING, avatar
+seated inside) → drive 13 m → must stop → park & persist; NPC conversation opens with
+choices, picking one gets an actual reply, TALKING state + chip, clean close; changing
+room state + curtain; save + vehicle persistence. Also `npm run typecheck` and
+`npm run build` pass.
+
+**Remaining defects** — presence position sync is still client-trusted (server movement
+sanity check planned with the social phase); emoji icons need a system emoji font in the
+headless container only (real browsers are fine).
+
+**Infrastructure still required** — none for this phase (works online and offline).

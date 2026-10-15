@@ -119,6 +119,31 @@ body.touch .actionMenu .action kbd { display: none; }
 .askRow { display: flex; gap: 10px; }
 .askRow button { margin-top: 14px; }
 
+/* conversation (NPC / player dialogue) */
+.dialogue { position: absolute; left: 50%; bottom: calc(128px + var(--sab)); transform: translateX(-50%); width: min(460px, 92%); z-index: 8; background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 14px 16px; box-shadow: 0 22px 60px #000a; }
+.dlgHead { display: flex; gap: 10px; align-items: center; }
+.dlgHead small { display: block; color: var(--muted); font-size: 10px; letter-spacing: .12em; }
+.dlgX { margin-left: auto; width: 32px; height: 32px; border-radius: 10px; padding: 0; font-size: 16px; }
+.dlgLine { margin: 10px 0 12px; font-size: 13.5px; line-height: 1.55; }
+.dlgChoices { display: flex; flex-direction: column; gap: 7px; }
+.dlgChoice { display: flex; align-items: center; gap: 9px; width: 100%; padding: 9px 11px; border: 1px solid var(--line); border-radius: 12px; background: #141b16; text-align: left; font-size: 13px; cursor: pointer; }
+.dlgChoice:hover { border-color: #a5ff3880; }
+.dlgChoice:first-child { background: var(--lime); color: #0b0e0c; border-color: transparent; }
+.dlgChoice.off { opacity: .45; }
+.dlgChoice kbd { font: 800 10px/1 'DM Sans', sans-serif; padding: 4px 6px; border: 1px solid currentColor; border-radius: 5px; opacity: .8; min-width: 20px; text-align: center; }
+.dlgChoice .ic { font-size: 17px; }
+.dlgChoice .lb { flex: 1; font-weight: 700; }
+body.touch .dlgChoice kbd { display: none; }
+
+/* activity chip: what the character is doing right now */
+.actChip { position: absolute; right: calc(18px + var(--sar)); top: calc(120px + var(--sat)); display: flex; gap: 8px; align-items: center; padding: 8px 13px; background: rgba(12, 17, 13, 0.88); border: 1px solid #a5ff3860; border-radius: 999px; font-size: 12px; z-index: 3; backdrop-filter: blur(8px); }
+.actChip strong { font-weight: 800; }
+
+/* private changing area: curtain of privacy over the 3D view while the style studio is open */
+.changing { position: absolute; inset: 0; z-index: 4; pointer-events: none; background: radial-gradient(ellipse at center, rgba(10, 14, 11, 0.55), rgba(5, 8, 6, 0.82)); backdrop-filter: blur(3px); }
+.changingTag { position: absolute; top: calc(96px + var(--sat)); left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 18px; background: rgba(8, 12, 9, 0.9); border: 1px solid var(--line); border-radius: 14px; font-size: 12px; }
+.changingTag span { color: var(--muted); font-size: 10.5px; }
+
 /* profile card */
 .profileHead { display: flex; gap: 12px; align-items: center; margin-bottom: 10px; }
 .profileHead small { display: block; color: var(--muted); }
