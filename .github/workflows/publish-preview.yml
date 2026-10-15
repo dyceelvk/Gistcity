@@ -1,7 +1,8 @@
-# Rebuilds the game and republishes the preview link (GitHub Pages) on every push to main.
+# Rebuilds the game and republishes the preview link (GitHub Pages) on every push to
+# main or an arena session branch (so the phone preview link always shows the newest UI).
 name: Publish preview (GitHub Pages)
 on:
-  push: { branches: [main] }
+  push: { branches: [main, 'arena/**'] }
   workflow_dispatch:
 permissions: { contents: write }
 concurrency: { group: preview, cancel-in-progress: true }
