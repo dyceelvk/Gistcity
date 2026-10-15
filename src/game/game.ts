@@ -30,6 +30,8 @@ import { ActivityMachine } from './activity';
 import { npcConversation, citizenConversation, type Conversation, type DialogueChoice } from './dialogue';
 import { makeSocial, type Social } from '../net/social';
 import { SocialUI } from '../ui/social-ui';
+import { makeFamily, type Family } from '../net/family';
+import { FamilyUI } from '../ui/family-ui';
 
 const WALK = 3.3, RUN = 6.4, RADIUS = 0.38;
 
@@ -122,6 +124,9 @@ export class Game implements HudHost, SocietyHost {
   /** Public citizen pages + private DMs. */
   private social: Social;
   private socialUI: SocialUI;
+  /** Marriage, family & ageing. */
+  private family: Family;
+  private familyUI: FamilyUI;
   /** Total simulated seconds (clamped dt) — debugging & tests; unlike Clock.elapsedTime it survives slow frames. */
   simSeconds = 0;
 
@@ -201,6 +206,7 @@ export class Game implements HudHost, SocietyHost {
       social: this.social,
       myUsername: () => this.store.state.username || 'me',
       myName: () => this.store.state.name,
+      myAge: () => this.family?.ageNow() ?? 25,
       openPanel: (id) => this.hud.open(id),
       closeAll: () => this.hud.closeAll(),
       toast: (msg, ms) => this.hud.toast(msg, ms),
@@ -211,6 +217,19 @@ export class Game implements HudHost, SocietyHost {
     this.hud.socialOpen = (username) => this.socialUI.openProfile(username);
     this.social.onMessage = (thread) => { this.socialUI.onIncoming(thread); void this.socialUI.refreshBadge(); };
     void this.socialUI.refreshBadge();
+
+    // marriage, family & ageing
+    this.family = makeFamily(this.store);
+    this.familyUI = new FamilyUI({
+      family: this.family,
+      openPanel: (id) => this.hud.open(id),
+      toast: (msg, ms) => this.hud.toast(msg, ms),
+      ask: (title, hint, placeholder, numeric) => this.hud.ask(title, hint, placeholder, numeric),
+      confirm: (title) => window.confirm(title),
+      onFamilyChanged: () => { /* age is computed live; panels re-render on open */ },
+      familyRoom: () => void this.familyRoom(),
+    });
+    this.hud.family = this.familyUI;
     this.hud.setTouch(touch);
     this.hud.onAction = (i) => this.runAction(i);
     this.input.onInteract = () => {
@@ -491,9 +510,16 @@ export class Game implements HudHost, SocietyHost {
       case 'gym': { const c = CONSUMABLES.find((x) => x.id === 'svc-gym')!; return [{ icon: '🏋️', label: 'Train (health +8, energy −10)', cost: c.price, disabled: s.cash < c.price ? "Can't afford" : s.needs.energy < 15 ? 'Too tired to train' : undefined, run: () => void this.consume(c) }]; }
       case 'school-desk': return [{ icon: '🎓', label: 'Admissions: courses & certificates', run: () => this.hud.open('school') }];
       case 'gov-employment': return [{ icon: '🏛️', label: 'Employment desk', run: () => this.hud.open('gov') }];
-      case 'gov-registry': return [{ icon: '📜', label: 'Civil Registry', disabled: 'Marriages & births — coming soon', run: () => {} }];
+      case 'gov-registry': return [
+        { icon: '💍', label: 'Marriage & family desk', run: () => { this.visit('gov'); this.hud.open('registry'); } },
+        { icon: '👶', label: 'Birth registry (today)', run: () => { this.visit('gov'); this.hud.open('registry'); } },
+      ];
       case 'gov-revenue': return [{ icon: '🧾', label: 'Revenue desk', disabled: 'Business permits — coming soon', run: () => {} }];
-      case 'hospital-desk': case 'pharmacy': return [{ icon: z.id === 'pharmacy' ? '💊' : '🏥', label: z.id === 'pharmacy' ? 'Pharmacy counter' : 'Reception: see the doctor', run: () => this.hud.open('hospital') }];
+      case 'hospital-desk': case 'pharmacy': {
+        const acts = [{ icon: z.id === 'pharmacy' ? '💊' : '🏥', label: z.id === 'pharmacy' ? 'Pharmacy counter' : 'Reception: see the doctor', run: () => this.hud.open('hospital') }];
+        if (z.id === 'hospital-desk') acts.push({ icon: '👶', label: 'Maternity room: start a family', run: () => void this.familyRoom() } as any);
+        return acts;
+      }
       case 'church-board': case 'church-greeter': return [{ icon: '⛪', label: z.id === 'church-board' ? 'Church notice board' : 'Ask about services & membership', run: () => this.hud.open('church') }];
       case 'church-basket': return [{ icon: '🧺', label: 'Give an offering', run: () => void this.offering() }];
       case 'dealer-car': { const model = z.data?.model ?? ''; return [{ icon: '🚗', label: `Inspect the ${z.label}`, run: () => { this.hud.toast(`${z.label}: see the price list and buy at the sales desk.`); this.hud.open('dealer'); } }, { icon: '💳', label: 'Buy this model', run: () => this.hud.open('dealer') }].filter(() => !!model); }
@@ -709,6 +735,45 @@ export class Game implements HudHost, SocietyHost {
     this.lastChip = s;
     if (s) this.hud.activityChip(s, this.chipIcon());
     else this.hud.activityChipClear();
+  }
+
+  /* ------------------------------------------------------- family room */
+
+  /** The character's current age (accelerated city calendar). */
+  myAge(): number { return this.family.ageNow(); }
+
+  /**
+   * The family room at GistCity General: a married couple enters, the scene
+   * fades to black (abstract, non-explicit by design — the brief's own safety
+   * rules), and the newborn is registered to both parents in today's registry.
+   */
+  private async familyRoom() {
+    if (this.busy) return;
+    const m = await this.familyUI.activeMarriage();
+    if (!m) { this.hud.toast('The family room is for married couples. The Civil Registry can help with that.'); return; }
+    const name = await this.hud.ask(
+      'The family room',
+      `You and ${m.partner} are expected at the maternity room. What name would you like for the baby?`,
+      "Baby's name", false);
+    if (name === null || !name.trim()) return;
+    this.hud.closeAll();
+    const fade = document.getElementById('fade');
+    const msg = document.getElementById('fadeMsg');
+    if (msg) msg.textContent = 'A new chapter for your family…';
+    fade?.classList.add('on');
+    this.busy = true;
+    await new Promise((r) => setTimeout(r, 2600));
+    const r = await this.family.childbirth(m.id, name.trim());
+    await new Promise((r2) => setTimeout(r2, 900));
+    fade?.classList.remove('on');
+    this.busy = false;
+    if (r.ok) {
+      this.hud.emote('👶');
+      this.hud.toast(`👶 ${r.name ?? name.trim()} was born today — matched to you and ${m.partner} in the registry.`, 6500);
+      this.store.update((s) => { s.stats.popularity += 5; s.stats.xp += 50; });
+    } else {
+      this.hud.toast(r.message ?? 'Could not register the birth', 4500);
+    }
   }
   private bubble(r: Remote, text: string) {
     if (r.bubble) r.avatar.root.remove(r.bubble);

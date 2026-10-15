@@ -16,6 +16,8 @@ export interface MediaItem { id: string; kind: 'photo' | 'clip'; path: string; c
 export interface ProfilePage {
   id: string; username: string; display_name: string; bio: string; avatar_url: string | null;
   created_at: string; occupation: string;
+  /** Age in the accelerated city calendar (server-computed when online). */
+  age?: number;
   followers: number; following: number;
   i_follow: boolean; follows_me: boolean; can_dm: boolean; blocked_by_me: boolean;
   media: MediaItem[];
@@ -164,7 +166,7 @@ export class CloudSocial implements Social {
 
 /* ------------------------------------------------------------------ local */
 
-interface LocalCitizen { name: string; username: string; bio: string; occupation: string; color: string; replies: string[] }
+interface LocalCitizen { name: string; username: string; age: number; bio: string; occupation: string; color: string; replies: string[] }
 interface LocalMsg { id: number; mine: boolean; body: string; media_path: string | null; created_at: string; read_at: string | null }
 interface LocalThread { username: string; messages: LocalMsg[]; unread: number; last_at: string }
 interface LocalSocialData {
@@ -176,10 +178,10 @@ interface LocalSocialData {
 
 /** Local citizens for practice mode — the same people as the city's NPCs. */
 export const LOCAL_CITIZENS: LocalCitizen[] = [
-  { name: 'Tunde', username: 'tunde', bio: 'Area boy with a plan. Danfo stories and football takes.', occupation: 'Dispatch rider', color: '#2e86de', replies: ['How far!', 'E choke 😂', 'Make we link up later.', 'You don chop?'] },
-  { name: 'Chioma', username: 'chioma', bio: 'Market woman. I sell anything that sells.', occupation: 'Trader · Mama Nkechi Kitchen', color: '#e33e79', replies: ['Welcome! Wetin you dey find?', 'Market dey fine today.', 'Come back tomorrow, I go give you better price.'] },
-  { name: 'Emeka', username: 'emeka', bio: 'Mechanic wey dey fix your car and your grammar.', occupation: 'Mechanic · Iron Temple', color: '#f5c242', replies: ['Your car ready.', 'Bring am for workshop.', 'No wahala my guy.'] },
-  { name: 'Ngozi', username: 'ngozi', bio: 'Nurse by day, dancer by night.', occupation: 'Nurse · GistCity General', color: '#2ecc71', replies: ['I dey fine o!', 'Take care of your health.', 'See you for church on Sunday.'] },
+  { name: 'Tunde', username: 'tunde', age: 27, bio: 'Area boy with a plan. Danfo stories and football takes.', occupation: 'Dispatch rider', color: '#2e86de', replies: ['How far!', 'E choke 😂', 'Make we link up later.', 'You don chop?'] },
+  { name: 'Chioma', username: 'chioma', age: 31, bio: 'Market woman. I sell anything that sells.', occupation: 'Trader · Mama Nkechi Kitchen', color: '#e33e79', replies: ['Welcome! Wetin you dey find?', 'Market dey fine today.', 'Come back tomorrow, I go give you better price.'] },
+  { name: 'Emeka', username: 'emeka', age: 35, bio: 'Mechanic wey dey fix your car and your grammar.', occupation: 'Mechanic · Iron Temple', color: '#f5c242', replies: ['Your car ready.', 'Bring am for workshop.', 'No wahala my guy.'] },
+  { name: 'Ngozi', username: 'ngozi', age: 24, bio: 'Nurse by day, dancer by night.', occupation: 'Nurse · GistCity General', color: '#2ecc71', replies: ['I dey fine o!', 'Take care of your health.', 'See you for church on Sunday.'] },
 ];
 
 const LKEY = 'gist_social_v1';
@@ -218,7 +220,7 @@ export class LocalSocial implements Social {
     const u = username.toLowerCase();
     return this.citizen(u) ?? {
       name: u.replace(/[_-]/g, ' ').replace(/\b\w/g, (m) => m.toUpperCase()),
-      username: u, bio: 'Citizen of GistCity.', occupation: 'Citizen', color: '#8a9a8a',
+      username: u, age: 26, bio: 'Citizen of GistCity.', occupation: 'Citizen', color: '#8a9a8a',
       replies: ['How far!', 'No wahala.', 'Make we talk later.', 'I dey hear you.'],
     };
   }
@@ -226,13 +228,14 @@ export class LocalSocial implements Social {
   async profilePage(username: string): Promise<ProfilePage> {
     const u = username.toLowerCase();
     const mine = this.store.state.username === u || u === 'me';
-    const me = { name: this.store.state.name, username: this.store.state.username || 'me', bio: 'Citizen of GistCity.', occupation: 'Citizen', color: '#a5ff38' };
+    const me: LocalCitizen = { name: this.store.state.name, username: this.store.state.username || 'me', age: 0, bio: 'Citizen of GistCity.', occupation: 'Citizen', color: '#a5ff38', replies: [] };
     const c = mine ? me : this.person(u);
     const key = mine ? 'me' : c.username;
     return {
       id: key, username: c.username, display_name: c.name, bio: c.bio,
       avatar_url: null, created_at: new Date(Date.now() - 86400e3 * 90).toISOString(),
       occupation: c.occupation,
+      age: mine ? undefined : c.age,
       followers: (this.d.follows.includes(key) ? 1 : 0) + (mine ? 12 : 3),
       following: mine ? this.d.follows.length : 2,
       i_follow: this.d.follows.includes(key),

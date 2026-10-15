@@ -89,9 +89,13 @@ async function main() {
   for (const t of tests) steps.push([`test ${t}`, join(ROOT, 'supabase/tests', t)]);
 
   let failed = 0;
+  const resetSession = async () => {
+    try { await db.query('reset role'); await db.query("select set_config('request.jwt.claim.sub', '', false)"); } catch { /* ignore */ }
+  };
   for (const [label, file] of steps) {
     try {
       let out = '';
+      await resetSession();
       for (const stmt of splitSql(stripMeta(file))) {
         const res = await db.query(stmt);
         const rows = Array.isArray(res) ? res.flat() : [res];
@@ -102,6 +106,7 @@ async function main() {
       failed++;
       console.error(`FAIL  ${label}\n      ${String(e.message).split('\n').slice(0, 4).join('\n      ')}`);
     }
+    await resetSession();
   }
 
   await db.end();

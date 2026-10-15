@@ -14,6 +14,7 @@ export interface SocialHost {
   social: Social;
   myUsername(): string;
   myName(): string;
+  myAge(): number;
   openPanel(id: string): void;
   closeAll(): void;
   toast(msg: string, ms?: number): void;
@@ -63,6 +64,7 @@ export class SocialUI {
     const body = $('#profileBody');
     if (!p) return;
     const mine = p.username === this.host.myUsername() || p.id === 'me';
+    const age = p.age ?? (mine ? this.host.myAge() : undefined);
     $('#profileKicker').textContent = mine ? 'YOUR PUBLIC PAGE' : 'CITIZEN';
     $('#profileTitle').textContent = p.display_name;
 
@@ -72,7 +74,7 @@ export class SocialUI {
         <div>
           <strong>${esc(p.display_name)}</strong>
           <small>@${esc(p.username)}</small>
-          <small>${esc(p.occupation)}</small>
+          <small>${esc(p.occupation)}${age !== undefined ? ` · ${Math.floor(age)} y/o` : ''}</small>
         </div>
       </div>
       <div class="profileStats">

@@ -210,3 +210,55 @@ sync is still client-trusted (server movement check pending).
 with `supabase db push` (no deploy token in this environment), enable realtime
 for `dm_messages` (handled by the migration's publication guard), and create the
 two storage buckets (also handled by the migration when storage exists).
+
+## 10. Phase 3 — family, marriage & accelerated ageing (this commit)
+
+**Server** (`supabase/migrations/20261018000005_gistcity_family.sql`, re-runnable):
+- `characters` (players + newborns, parents linked), `marriages` (proposal →
+  both sign the **marriage agreement** → active; either partner may end it),
+  `births` (the daily registry; one newborn per couple per game-day).
+- Accelerated age model (mirrored in `src/game/family.ts`): 1 game-day = 24 real
+  minutes, 1 game-month = 7 game-days; month 0→1 = 0→10 y/o, month 1→12 = 10→25
+  y/o, then +1 year per month. `age_years()` / `born_at_for_age()` /
+  `character_age()`; new players start at 18 via a profiles trigger (existing
+  accounts backfilled).
+- **Age gates** as table triggers, not UI-only: school enrolment 16+, government
+  applications 18+, vehicle ownership 18+ (`GC_TOO_YOUNG` — a 10 y/o cannot be a
+  car owner or a house seller; property eligibility lands with the registry).
+- RPCs: `character_me`, `marriage_propose` (adults only, no blocks, single),
+  `marriage_sign` (both signatures required), `marriage_end`, `marriages_mine`,
+  `family_tree` (spouse/children/parents with ages), `childbirth` — the abstract
+  **family room** (enter → fade to black → newborn registered to both parents,
+  registry fee through the ledger), `birth_registry` (every baby **matched to the
+  parents who gave birth that day**), and `profile_page` now includes age.
+
+**Client**:
+- `src/game/family.ts` (the age math), `src/net/family.ts` (Cloud RPCs + local
+  practice save with the same rules), `src/ui/family-ui.ts` — the Civil Registry
+  panel: propose with an editable marriage agreement, dual-signature status,
+  withdraw/end, the family tree, and today's birth registry.
+- In-world: the `gov-registry` desk is open (no longer "coming soon"), and the
+  hospital has the **Maternity room: start a family** action — the family-room
+  scene fades to black (`#fade`), stays abstract and non-explicit per the
+  brief's safety rules, and announces the newborn. The Life panel and citizen
+  pages show age; marriage & family is removed from the map's "coming soon".
+
+**Tests performed** — `node scripts/db-tests.mjs`: **11/11 steps pass** including
+the new `family_test.sql` (age-maths boundaries 0/10/≈11.4/25/26, inverse
+`born_at_for_age`, 18 y/o at signup, GC_TOO_YOUNG gates at 10 and 17 for
+vehicles/gov/school-with-16-min, self/child/already-married proposals, dual
+signature activation, family tree both sides, childbirth matching to both
+parents, one-per-day rule, registry listing, leaving a marriage, RLS privacy,
+and an economy supply audit at the end). `node scripts/game-smoke.mjs`:
+**59/59 checks pass** — age 18 on Life, proposal → both signatures → active,
+tree shows spouse, family room asks the name, fade to black in/out, newborn in
+today's registry matched to both parents, newborn in the tree, second birth
+rejected with the server message.
+
+**Remaining defects** — marrying an offline player waits for their signature
+(realtime for marriage events not wired — the registry panel refreshes itself);
+children exist as registry records (they cannot yet be played or claimed by
+their own accounts); inheritance/wills not implemented.
+
+**Infrastructure still required** — apply the migration to the Supabase project
+(`supabase db push`).

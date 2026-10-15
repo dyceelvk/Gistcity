@@ -464,6 +464,85 @@ async function main() {
   });
   check('blocking stops DMs and is reversible from the page', /Unblock/.test(blocked.btn) && blocked.msgDisabled === true, JSON.stringify(blocked));
 
+  /* ------------------------------------- family: marriage & newborn */
+  const fam0 = await page.evaluate(() => ({
+    age: window.__gist.family.ageNow(),
+    lifeAge: (() => {
+      window.__gist.hud.open('life');
+      const t = document.getElementById('statGrid')?.textContent ?? '';
+      window.__gist.hud.closeAll();
+      return /AGE/.test(t) && /18 y\/o/.test(t);
+    })(),
+  }));
+  check('new players are 18 y/o (accelerated calendar)', Math.abs(fam0.age - 18) < 0.1, `age=${fam0.age}`);
+  check('the Life panel shows the character age', fam0.lifeAge === true, '');
+
+  const marry = await page.evaluate(async () => {
+    const g = window.__gist;
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    g.hud.open('registry');
+    await sleep(600);
+    const form = !!document.getElementById('proposeBtn');
+    document.getElementById('proposeWho').value = 'chioma';
+    document.getElementById('proposeBtn').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await sleep(2200); // proposal sent + local partner reads & signs
+    const signBtn = !!document.getElementById('signBtn');
+    const ms = await g.family.marriages();
+    const partnerSigned = ms[0]?.partner_signed === true && ms[0]?.status === 'proposed';
+    document.getElementById('signBtn')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await sleep(600);
+    const roomBtn = !!document.getElementById('familyRoomBtn');
+    const treeText = document.getElementById('registryBody').textContent;
+    return { form, signBtn, partnerSigned, roomBtn, spouseShown: /Chioma/.test(treeText) };
+  });
+  check('registry offers the marriage proposal form', marry.form === true, '');
+  check('the agreement waits for BOTH signatures', marry.signBtn && marry.partnerSigned, JSON.stringify(marry));
+  check('signing activates the marriage (family room opens)', marry.roomBtn === true, '');
+  check('the family tree shows the spouse', marry.spouseShown === true, '');
+
+  const baby = await page.evaluate(async () => {
+    const g = window.__gist;
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    document.getElementById('familyRoomBtn').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await sleep(500);
+    const ask = document.getElementById('ask');
+    const askOpen = ask && !ask.classList.contains('hidden');
+    document.getElementById('askInput').value = 'Chidinma';
+    document.getElementById('askOk').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await sleep(400);
+    const faded = document.getElementById('fade').classList.contains('on');
+    await sleep(4200); // fade to black → registration → fade back
+    const fadedAfter = document.getElementById('fade').classList.contains('on');
+    g.hud.open('registry');
+    await sleep(700);
+    const body = document.getElementById('registryBody').textContent;
+    return {
+      askOpen, faded, fadedAfter,
+      registryShows: /Chidinma/.test(body),
+      matched: /Fada|Testero|Chioma/.test(body), // parents listed on the registry line
+      treeShows: /Chidinma/.test(body),
+    };
+  });
+  check('the family room asks for the baby name', baby.askOpen === true, '');
+  check('the scene fades to black (private, non-explicit)', baby.faded === true && baby.fadedAfter === false, `in=${baby.faded} out=${!baby.fadedAfter}`);
+  check('newborn appears in today\'s birth registry', baby.registryShows === true, '');
+  check('newborn is matched to the parents on the registry', baby.matched === true, '');
+  check('newborn appears in the family tree', baby.treeShows === true, '');
+
+  const again = await page.evaluate(async () => {
+    const g = window.__gist;
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    document.getElementById('familyRoomBtn').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await sleep(400);
+    document.getElementById('askInput').value = 'Second';
+    document.getElementById('askOk').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await sleep(4200);
+    const toast = document.getElementById('toast').textContent;
+    const children = (await g.family.tree()).children.length;
+    return { toast, children };
+  });
+  check('one newborn per couple per day (server rule)', again.children === 1 && /One baby per couple per day/.test(again.toast), JSON.stringify(again));
+
   /* -------------------------------------- persistence & summary */
   const persist = await page.evaluate(async () => {
     const g = window.__gist;

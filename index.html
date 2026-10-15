@@ -75,6 +75,8 @@
     <!-- sleeping overlay -->
     <div class="driveHud hidden" id="driveHud"><div><small id="driveName">Driving</small><strong><span id="driveSpeed">0</span> <em>km/h</em></strong></div><button class="primary" id="driveExit">PARK &amp; EXIT</button></div>
     <div class="sleep hidden" id="sleep"><div class="sleepCard"><strong>Sleeping…</strong><p>Energy <span id="sleepEnergy">0%</span></p><i class="sleepBar"><b id="sleepFill"></b></i><button class="primary" id="wakeBtn">WAKE UP</button></div></div>
+    <!-- fade to black: private in-world moments (the family room) -->
+    <div class="fade" id="fade"><div class="fadeMsg" id="fadeMsg"></div></div>
     <!-- small input dialog -->
     <div class="ask hidden" id="ask"><div class="askCard"><strong id="askTitle"></strong><p class="muted" id="askHint"></p><input id="askInput" inputmode="numeric" autocomplete="off" /><div class="askRow"><button class="ghost" id="askCancel">Cancel</button><button class="primary" id="askOk">SEND</button></div></div></div>
 
@@ -208,6 +210,11 @@
     <section class="panel hidden" id="panel-dm">
       <div class="panelHead"><div><small>PRIVATE</small><h2>Messages</h2></div><button class="close" data-close>×</button></div>
       <div id="dmBody" class="sbody"></div>
+    </section>
+
+    <section class="panel hidden" id="panel-registry">
+      <div class="panelHead"><div><small>CIVIL REGISTRY</small><h2>Marriage &amp; Family</h2></div><button class="close" data-close>×</button></div>
+      <div id="registryBody" class="sbody"></div>
     </section>
 
     <!-- sign in / create account (shown only when the game runs with a backend) -->

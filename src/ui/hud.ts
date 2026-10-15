@@ -39,11 +39,13 @@ export interface HudHost {
   wakeUp(): void;
   /** Leave the car (park it where it stands). */
   exitVehicle(): void;
+  /** The character's current age in the accelerated city calendar. */
+  myAge(): number;
 }
 export interface PanelRenderer { render(id: string): void; stopTimers(): void }
 
 /** Places on the map that exist in the plan but are not built yet — shown honestly as coming soon. */
-export const COMING_SOON = ['🏦 Bank', '🏪 Businesses & property', '🏘️ Housing market', '💍 Marriage & family'];
+export const COMING_SOON = ['🏦 Bank', '🏪 Businesses & property', '🏘️ Housing market'];
 
 const $ = <T extends HTMLElement = HTMLElement>(sel: string) => document.querySelector(sel) as T;
 const $$ = <T extends HTMLElement = HTMLElement>(sel: string) => Array.from(document.querySelectorAll(sel)) as T[];
@@ -68,6 +70,8 @@ export class Hud {
   onPanel: ((id: string | null) => void) | null = null;
   /** Citizen pages & DMs render through this hook. */
   social: PanelRenderer | null = null;
+  /** Marriage, family & the registry render through this hook. */
+  family: PanelRenderer | null = null;
 
   constructor(private host: HudHost) {
     const s = host.store;
@@ -120,6 +124,7 @@ export class Hud {
     if (id === 'account') this.renderAccount();
     this.panels?.render(id);
     this.social?.render(id);
+    this.family?.render(id);
     this.onPanel?.(id);
   }
   closeAll(resetCamera = true) {
@@ -129,6 +134,7 @@ export class Hud {
     $('#changing').classList.add('hidden');
     this.panels?.stopTimers();
     this.social?.stopTimers();
+    this.family?.stopTimers();
     if (this.openId === 'style' && resetCamera) this.host.setPortrait(false);
     if (this.openId === 'style') this.host.store.update(() => { /* flush name edits */ });
     const was = this.openId;
@@ -462,6 +468,7 @@ export class Hud {
     const bar = (v: number, max: number) => `<i><b style="width:${Math.min(100, Math.round((v / max) * 100))}%"></b></i>`;
     $('#statGrid').innerHTML = [
       ['LEVEL', `${lvl}`, bar(st.stats.xp - lo, hi - lo)],
+      ['AGE', `${Math.floor(this.host.myAge())} y/o`, ''],
       ['WALLET', fmtG(st.cash), ''],
       ['HUNGER', `${Math.round(st.needs.hunger)}%`, bar(st.needs.hunger, 100)],
       ['THIRST', `${Math.round(st.needs.thirst)}%`, bar(st.needs.thirst, 100)],

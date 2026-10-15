@@ -179,6 +179,30 @@ body.touch .dlgChoice kbd { display: none; }
 .chatComposer input { flex: 1; border: 1px solid var(--line); background: #070a08; color: #fff; border-radius: 12px; padding: 11px 12px; outline: none; font-size: 14px; }
 .attachChip { display: flex; gap: 8px; align-items: center; margin-top: 8px; font-size: 12px; color: var(--muted); }
 
+/* ------------------------------------------------- civil registry & family */
+.regCard { border: 1px solid var(--line); border-radius: 16px; padding: 14px; margin-bottom: 12px; background: #10161008; }
+.regCard small { letter-spacing: .12em; color: var(--muted); font-size: 10px; }
+.regCard label { display: block; margin: 10px 0 6px; font-size: 12px; color: var(--muted); }
+.regCard input, .regCard textarea { width: 100%; margin-top: 8px; border: 1px solid var(--line); background: #070a08; color: #fff; border-radius: 11px; padding: 10px 12px; outline: none; font-size: 14px; font-family: inherit; }
+.regMe { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
+.ageChip { padding: 3px 10px; border-radius: 999px; background: var(--lime); color: #0b0e0c; font-weight: 800; font-size: 12px; }
+.agreeText { border-left: 3px solid var(--lime); padding: 8px 12px; margin: 10px 0; font-size: 13px; line-height: 1.6; background: #0c110d; border-radius: 0 10px 10px 0; }
+.signRow { display: flex; gap: 18px; font-size: 13px; margin: 8px 0; }
+.tree { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.treeRow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.treeTag { width: 72px; font-size: 10px; letter-spacing: .12em; color: var(--muted); }
+.treePerson { padding: 6px 11px; border: 1px solid var(--line); border-radius: 999px; font-size: 12.5px; }
+.treePerson.me { background: var(--lime); color: #0b0e0c; border-color: transparent; }
+.treePerson em { font-style: normal; opacity: .7; font-size: 11px; }
+.birthList { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.birthRow { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; font-size: 13px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 12px; }
+.birthRow small { margin-left: auto; color: var(--muted); }
+
+/* fade to black for private in-world moments */
+.fade { position: fixed; inset: 0; z-index: 20; background: #000; display: grid; place-items: center; opacity: 0; pointer-events: none; transition: opacity 1.1s ease; }
+.fade.on { opacity: 1; pointer-events: auto; }
+.fadeMsg { color: #e8e8e8; font-size: 15px; letter-spacing: .18em; text-transform: uppercase; opacity: .85; }
+
 /* profile card */
 .profileHead { display: flex; gap: 12px; align-items: center; margin-bottom: 10px; }
 .profileHead small { display: block; color: var(--muted); }
