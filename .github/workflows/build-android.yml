@@ -1,16 +1,31 @@
-# Builds an installable Android APK of GIST with Capacitor (debug-signed, for
-# testing on real phones). Download it from the workflow run → Artifacts.
-# Uses the same VITE_* secrets as the web deploy.
+# Builds the GistCity Android APK (Capacitor) and publishes it as a GitHub
+# Release so there is always one install link:
+#   https://github.com/dyceelvk/Gistcity/releases/latest/download/GistCity.apk
+#
+# Secrets used (Settings → Secrets and variables → Actions):
+#   VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY  public backend values baked into the build
+#   ANDROID_KEYSTORE_BASE64                     release keystore (base64 of the .jks)
+#   ANDROID_KEYSTORE_PASSWORD / ANDROID_KEY_ALIAS / ANDROID_KEY_PASSWORD
+# Without the keystore secrets the APK is debug-signed (installable, but a
+# later build cannot update over it without uninstalling first).
 name: Build Android APK
 
 on:
-  workflow_dispatch:
   push:
-    tags: ['v*']
+    branches: [main]
+    paths-ignore: ['docs/**', '**.md']
+  workflow_dispatch:
+
+concurrency: { group: apk, cancel-in-progress: true }
+
+permissions:
+  contents: write
 
 jobs:
   apk:
     runs-on: ubuntu-latest
+    env:
+      KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -19,20 +34,68 @@ jobs:
         with: { distribution: temurin, java-version: 21 }
       - uses: android-actions/setup-android@v3
       - run: npm ci
-      - name: Build web assets
+      - run: npm run typecheck
+      - name: Build web assets (bundled into the APK)
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
-        run: npm run build
+          VITE_WEB_URL: https://dyceelvk.github.io/Gistcity/
+        run: npm run build && node scripts/check-bundle-secrets.mjs dist
+      - name: Backend configured?
+        run: |
+          if [ -z "${{ secrets.VITE_SUPABASE_URL }}" ]; then echo "::warning::VITE_SUPABASE_URL secret is empty — this APK runs in offline practice mode"; fi
       - name: Add Capacitor Android project
         run: |
           npm i -D @capacitor/cli@6 @capacitor/core@6 @capacitor/android@6
           npx cap add android
           npx cap sync android
-      - name: Assemble debug APK
+          node scripts/android-postsync.mjs
+      - name: Version from build number
+        run: |
+          CODE=$(( 100 + ${{ github.run_number }} ))
+          NAME="0.$(( ${{ github.run_number }} / 100 )).$(( ${{ github.run_number }} % 100 ))"
+          sed -i "s/versionCode [0-9]*/versionCode $CODE/; s/versionName \"[^\"]*\"/versionName \"$NAME\"/" android/app/build.gradle
+          echo "APP_VERSION=$NAME" >> $GITHUB_ENV
+          echo "version $NAME ($CODE)"
+      - name: Release keystore
+        if: env.KS_B64 != ''
+        run: |
+          echo "$KS_B64" | base64 -d > android/app/release.jks
+          cat >> android/app/build.gradle <<'EOF'
+          android {
+              signingConfigs {
+                  release {
+                      storeFile file("release.jks")
+                      storePassword System.getenv("KS_PASS")
+                      keyAlias System.getenv("KS_ALIAS")
+                      keyPassword System.getenv("KS_KEY_PASS")
+                  }
+              }
+              buildTypes { release { signingConfig signingConfigs.release } }
+          }
+          EOF
+      - name: Assemble APK
         working-directory: android
-        run: chmod +x gradlew && ./gradlew assembleDebug --no-daemon
+        env:
+          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KS_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KS_KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          chmod +x gradlew
+          if [ -n "$KS_B64" ]; then ./gradlew assembleRelease --no-daemon -q && cp app/build/outputs/apk/release/app-release.apk ../GistCity.apk;
+          else ./gradlew assembleDebug --no-daemon -q && cp app/build/outputs/apk/debug/app-debug.apk ../GistCity.apk; fi
+          ls -la ../GistCity.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: GIST-android-debug-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: GistCity-apk
+          path: GistCity.apk
+      - name: Publish release (latest APK)
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="apk-v${APP_VERSION}"
+          NOTES="GistCity Android build ${APP_VERSION} from ${GITHUB_SHA::7}.
+          Install: download GistCity.apk on your Android phone, open it and allow installing from this source.
+          Backend: $([ -n '${{ secrets.VITE_SUPABASE_URL }}' ] && echo 'connected to GistCity (accounts, G economy, multiplayer)' || echo 'not configured — offline practice mode')."
+          gh release create "$TAG" GistCity.apk --title "GistCity APK ${APP_VERSION}" --notes "$NOTES" --latest

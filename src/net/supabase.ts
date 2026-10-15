@@ -41,6 +41,11 @@ export interface SignUpInput { username: string; displayName: string; email: str
 
 export type CloudStatus = 'offline' | 'connecting' | 'guest' | 'signed-in' | 'error';
 
+/** True inside the Capacitor Android app (served from https://localhost). */
+export const isNativeApp = () => !!(window as any).Capacitor?.isNativePlatform?.() || location.hostname === 'localhost' && location.protocol === 'https:';
+/** Where email links land. In the app the links open the hosted web build; in the browser, this page. */
+export const webUrl = () => (isNativeApp() ? (import.meta.env.VITE_WEB_URL as string | undefined) || 'https://dyceelvk.github.io/Gistcity/' : location.href.split('#')[0].split('?')[0]);
+
 /** Human-readable messages for the error codes raised by the database functions. */
 export const ERROR_TEXT: Record<string, string> = {
   GC_INSUFFICIENT_FUNDS: "Your G balance doesn't reach. Go hustle small!",
@@ -154,7 +159,7 @@ class Cloud {
       email: input.email.trim(),
       password: input.password,
       options: {
-        emailRedirectTo: location.href.split('#')[0].split('?')[0],
+        emailRedirectTo: webUrl(),
         data: {
           username: input.username.toLowerCase(),
           display_name: input.displayName.trim(),
@@ -170,6 +175,19 @@ class Cloud {
     }
     return { needsVerification: !data.session };
   }
+  /** Confirm a new account with the 6-digit code from the verification email (works inside the Android app, no link needed). */
+  async verifyEmailCode(email: string, code: string) {
+    if (!this.client) throw new Error('Cloud not configured');
+    let { error } = await this.client.auth.verifyOtp({ email: email.trim(), token: code.trim(), type: 'signup' });
+    if (error) ({ error } = await this.client.auth.verifyOtp({ email: email.trim(), token: code.trim(), type: 'email' }));
+    if (error) throw new Error(/expired|invalid/i.test(error.message) ? 'That code is wrong or has expired. Request a new one.' : error.message);
+  }
+  /** Password reset with the 6-digit code from the reset email; returns once a session exists so updatePassword() can run. */
+  async verifyRecoveryCode(email: string, code: string) {
+    if (!this.client) throw new Error('Cloud not configured');
+    const { error } = await this.client.auth.verifyOtp({ email: email.trim(), token: code.trim(), type: 'recovery' });
+    if (error) throw new Error(/expired|invalid/i.test(error.message) ? 'That code is wrong or has expired. Request a new one.' : error.message);
+  }
   async signIn(email: string, password: string) {
     if (!this.client) throw new Error('Cloud not configured');
     const { error } = await this.client.auth.signInWithPassword({ email: email.trim(), password });
@@ -177,12 +195,12 @@ class Cloud {
   }
   async resendVerification(email: string) {
     if (!this.client) throw new Error('Cloud not configured');
-    const { error } = await this.client.auth.resend({ type: 'signup', email: email.trim(), options: { emailRedirectTo: location.href.split('#')[0].split('?')[0] } });
+    const { error } = await this.client.auth.resend({ type: 'signup', email: email.trim(), options: { emailRedirectTo: webUrl() } });
     if (error) throw error;
   }
   async resetPassword(email: string) {
     if (!this.client) throw new Error('Cloud not configured');
-    const { error } = await this.client.auth.resetPasswordForEmail(email.trim(), { redirectTo: location.href.split('#')[0].split('?')[0] });
+    const { error } = await this.client.auth.resetPasswordForEmail(email.trim(), { redirectTo: webUrl() });
     if (error) throw error;
   }
   async updatePassword(password: string) {

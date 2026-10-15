@@ -13,6 +13,9 @@ export class AuthScreen {
   private root = document.getElementById('auth')!;
   private mode: Mode = 'signin';
   private pendingEmail = '';
+  /** Kept in memory only, so "I tapped the link" can sign the new citizen in without retyping. */
+  private pendingPassword = '';
+  private resetSent = false;
   private availTimer = 0;
 
   /** Resolves once a user is signed in (and the session is in `cloud`). */
@@ -47,16 +50,25 @@ export class AuthScreen {
       <label class="check"><input type="checkbox" id="aTos" /><span>I accept the <a href="terms.html" target="_blank" rel="noopener">Terms of Use</a> and the <a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.</span></label>
       <div class="err" id="aErr"></div>
       <button class="primary" id="aGo">CREATE MY ACCOUNT</button>`;
-    else if (this.mode === 'forgot') body = `<p class="muted">Enter your email and we will send a link to set a new password.</p>
+    else if (this.mode === 'forgot') body = this.resetSent
+      ? `<div class="notice">We sent a reset email to <b>${esc(this.pendingEmail)}</b>. Enter the 6-digit code from it and choose a new password. (If the email only has a link, open it — it lets you set the password on the web — then sign in here.)</div>
+      <label>6-digit code</label><input type="text" id="aCode" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="123456" />
+      <label>New password</label><input type="password" id="aPass" autocomplete="new-password" placeholder="At least 8 characters" />
+      <label>Confirm password</label><input type="password" id="aPass2" autocomplete="new-password" />
+      <div class="err" id="aErr"></div>
+      <button class="primary" id="aGo">SET NEW PASSWORD</button>
+      <div class="links"><button data-m="forgot-again">Send a new code</button><button data-m="signin">← Sign in</button></div>`
+      : `<p class="muted">Enter your email and we will send a code to set a new password.</p>
       <label>Email</label><input type="email" id="aEmail" autocomplete="email" inputmode="email" value="${esc(this.pendingEmail)}" />
       <div class="err" id="aErr"></div>
-      <button class="primary" id="aGo">SEND RESET LINK</button>
+      <button class="primary" id="aGo">SEND RESET CODE</button>
       <div class="links"><button data-m="signin">← Back to sign in</button></div>`;
-    else if (this.mode === 'verify') body = `<div class="notice">Check <b>${esc(this.pendingEmail || 'your inbox')}</b> for a verification link. Open it, then sign in here. Also check spam / promotions.</div>
-      <label>Email</label><input type="email" id="aEmail" autocomplete="email" inputmode="email" value="${esc(this.pendingEmail)}" />
+    else if (this.mode === 'verify') body = `<div class="notice">We sent a verification email to <b>${esc(this.pendingEmail || 'your inbox')}</b>. Enter the 6-digit code from it below — or tap the link in the email, then press <b>I tapped the link</b>. Check spam / promotions too.</div>
+      <label>6-digit code</label><input type="text" id="aCode" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="123456" />
       <div class="err" id="aErr"></div>
-      <button class="primary" id="aGo">RESEND VERIFICATION EMAIL</button>
-      <div class="links"><button data-m="signin">← Sign in</button></div>`;
+      <button class="primary" id="aGo">VERIFY & ENTER THE CITY</button>
+      <button class="ghost" id="aLinked">I TAPPED THE LINK — SIGN ME IN</button>
+      <div class="links"><button id="aResend">Resend email</button><button data-m="signin">← Sign in</button></div>`;
     else if (this.mode === 'recover') body = `<p class="muted">Choose a new password for ${esc(cloud.email || 'your account')}.</p>
       <label>New password</label><input type="password" id="aPass" autocomplete="new-password" placeholder="At least 8 characters" />
       <label>Confirm password</label><input type="password" id="aPass2" autocomplete="new-password" />
@@ -68,7 +80,21 @@ export class AuthScreen {
 
     const $ = <T extends HTMLElement = HTMLInputElement>(id: string) => r.querySelector('#' + id) as T;
     const err = (m: string) => { const e = r.querySelector('#aErr'); if (e) e.textContent = m; };
-    r.querySelectorAll<HTMLButtonElement>('[data-m]').forEach((b) => b.addEventListener('click', () => { this.pendingEmail = ($('aEmail') as HTMLInputElement | null)?.value?.trim() || this.pendingEmail; this.mode = b.dataset.m as Mode; this.render(done); }));
+    r.querySelectorAll<HTMLButtonElement>('[data-m]').forEach((b) => b.addEventListener('click', () => {
+      this.pendingEmail = ($('aEmail') as HTMLInputElement | null)?.value?.trim() || this.pendingEmail;
+      const m = b.dataset.m!;
+      if (m === 'forgot-again') { this.resetSent = false; this.mode = 'forgot'; } else this.mode = m as Mode;
+      this.render(done);
+    }));
+    $<HTMLButtonElement>('aResend')?.addEventListener('click', async () => {
+      try { await cloud.resendVerification(this.pendingEmail); err('Verification email sent again.'); } catch (e: any) { err(e?.message ?? 'Could not send'); }
+    });
+    $<HTMLButtonElement>('aLinked')?.addEventListener('click', async () => {
+      err('');
+      if (!this.pendingPassword) { this.mode = 'signin'; this.render(done); return; }
+      try { await cloud.signIn(this.pendingEmail, this.pendingPassword); done(); }
+      catch (e: any) { err(/not confirmed/i.test(String(e?.message)) ? 'Not verified yet — tap the link in the email first, or enter the code.' : (e?.message ?? 'Could not sign in')); }
+    });
     const go = $<HTMLButtonElement>('aGo');
     r.querySelectorAll('input').forEach((i) => i.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') go.click(); }));
 
@@ -92,7 +118,7 @@ export class AuthScreen {
         if (this.mode === 'signin') {
           const email = $('aEmail').value.trim(), pass = $('aPass').value;
           if (!email || !pass) throw new Error('Enter your email and password.');
-          this.pendingEmail = email;
+          this.pendingEmail = email; this.pendingPassword = pass;
           try { await cloud.signIn(email, pass); }
           catch (e: any) {
             const m = String(e?.message ?? '');
@@ -110,18 +136,28 @@ export class AuthScreen {
           if (!$('aAge').checked) throw new Error('You must be 16 or older to join GistCity.');
           if (!$('aTos').checked) throw new Error('Please accept the Terms of Use and Privacy Policy.');
           if (!(await cloud.usernameAvailable(username))) throw new Error('That username is taken.');
-          this.pendingEmail = email;
+          this.pendingEmail = email; this.pendingPassword = pass;
           const { needsVerification } = await cloud.signUp({ username, displayName, email, password: pass, tos: true, privacy: true, age: true });
           if (needsVerification) { this.mode = 'verify'; this.render(done); return; }
           done();
-        } else if (this.mode === 'forgot') {
-          const email = $('aEmail').value.trim(); if (!email) throw new Error('Enter your email.');
+        } else if (this.mode === 'forgot' && !this.resetSent) {
+          const email = $('aEmail').value.trim(); if (!/^\S+@\S+\.\S+$/.test(email)) throw new Error('Enter a valid email.');
           await cloud.resetPassword(email);
-          err('Reset link sent — check your inbox.');
+          this.pendingEmail = email; this.resetSent = true; this.render(done); return;
+        } else if (this.mode === 'forgot') {
+          const code = $('aCode').value.trim(), pass = $('aPass').value, pass2 = $('aPass2').value;
+          if (!/^\d{6,8}$/.test(code)) throw new Error('Enter the 6-digit code from the email.');
+          if (pass.length < 8) throw new Error('Password must be at least 8 characters.');
+          if (pass !== pass2) throw new Error('Passwords do not match.');
+          await cloud.verifyRecoveryCode(this.pendingEmail, code);
+          await cloud.updatePassword(pass);
+          done();
         } else if (this.mode === 'verify') {
-          const email = $('aEmail').value.trim(); if (!email) throw new Error('Enter your email.');
-          await cloud.resendVerification(email);
-          err('Verification email sent.');
+          const code = $('aCode').value.trim();
+          if (!/^\d{6,8}$/.test(code)) throw new Error('Enter the 6-digit code from the email.');
+          await cloud.verifyEmailCode(this.pendingEmail, code);
+          if (!cloud.signedIn && this.pendingPassword) await cloud.signIn(this.pendingEmail, this.pendingPassword);
+          done();
         } else if (this.mode === 'recover') {
           const pass = $('aPass').value, pass2 = $('aPass2').value;
           if (pass.length < 8) throw new Error('Password must be at least 8 characters.');

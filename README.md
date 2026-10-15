@@ -16,9 +16,13 @@ rest in your flat, buy fits, sit on a bench and gist with real people.
 GISTCITY is *not* GTA: no weapons, no crime loop. It is a lifestyle and social
 world with its own identity.
 
-**▶ Play it now:** https://dyceelvk.github.io/Gistcity/ — open on your Android phone and choose
-*Add to Home screen* to install it like an app. (This is the preview link; production
-hosting is Cloudflare Pages, see below.)
+**📱 Android APK (the product):** https://github.com/dyceelvk/Gistcity/releases/latest/download/GistCity.apk
+— built and signed by `.github/workflows/build-android.yml` on every push to `main`
+(Capacitor shell, game assets bundled in the APK, backend = Supabase).
+
+**🌐 Web build:** https://dyceelvk.github.io/Gistcity/ — the same game in a browser;
+it is also where verification / password-reset email links land (Site URL) and the
+desktop test build. Production web hosting is Cloudflare Pages (see below).
 
 | Piece | Tech |
 | --- | --- |
@@ -165,27 +169,22 @@ builds, refuses the deploy if a secret key reached the bundle, and publishes
 
 ## Android
 
-Two options, both using the same `dist/`:
+The APK is the primary deliverable. `build-android.yml` builds the web assets
+with the `VITE_*` secrets, generates the Capacitor Android project, brands it
+(`scripts/android-postsync.mjs`: launcher icons from `android-res/`, app name,
+manifest flags), signs it with the release keystore from the
+`ANDROID_KEYSTORE_*` secrets (falls back to debug signing when absent) and
+publishes `GistCity.apk` as the latest GitHub Release. Package id
+`com.rielinc.gistcity`, app name **GistCity**, min Android as per Capacitor 6
+(API 22+), versionCode = 100 + build number.
 
-**A. Standalone APK (Capacitor)** — run the *Build Android APK* workflow
-(`workflow_dispatch`) and download the artifact, or locally:
+Inside the app, account emails work without deep links: the player enters the
+6-digit code from the verification / reset email (the email templates include
+`{{ .Token }}`), or taps the link (which opens the web build) and then presses
+*I tapped the link*.
 
-```bash
-npm i -D @capacitor/cli @capacitor/core @capacitor/android
-npm run build && npx cap add android && npx cap sync android && npx cap open android
-```
-
-**B. Inside the Crushly app** — add a "Gist" tab that renders the Pages URL in
-`CrushlyApp/src/components/WebView.tsx` (already a dependency). To make the
-player the same account as the Crushly member, post the session into the
-WebView after it loads:
-
-```ts
-webviewRef.current?.postMessage(JSON.stringify({ type: 'gist:session', access_token, refresh_token }));
-```
-
-GIST calls `supabase.auth.setSession` with it and replies `{ type: 'gist:ready' }`
-through `window.ReactNativeWebView.postMessage`.
+Local build: `npm run build && npx cap add android && npx cap sync android &&
+node scripts/android-postsync.mjs && npx cap open android`.
 
 ## Project layout
 
