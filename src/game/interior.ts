@@ -18,6 +18,8 @@ export interface Interior {
   spawnYaw: number;
   setFurniture(placed: string[]): void;
   light: THREE.PointLight;
+  /** Per-frame hooks (rotating display cars, idle staff). */
+  animated?: ((dt: number, t: number) => void)[];
 }
 
 function tileTexture() {

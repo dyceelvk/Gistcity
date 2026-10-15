@@ -27,7 +27,10 @@ function normalizeUrl(raw: string) {
 }
 
 export type Pose = 'none' | 'sit' | 'sleep';
-export interface RemoteState { id: string; name: string; username: string; appearance: Appearance; x: number; z: number; yaw: number; speed: number; indoor: boolean; pose: Pose }
+/** Where a citizen is: the open city or one of the buildings (each interior is its own area). */
+export type Area = 'city' | 'home' | 'school' | 'gov' | 'hospital' | 'church' | 'dealer';
+export interface RemoteVehicle { model: string; color: string }
+export interface RemoteState { id: string; name: string; username: string; appearance: Appearance; x: number; z: number; yaw: number; speed: number; indoor: boolean; pose: Pose; area: Area; vehicle: RemoteVehicle | null; activity: string }
 export interface LeaderRow { name: string; username?: string; popularity: number; level: number; cash: number; you?: boolean }
 export interface Profile {
   id: string; username: string; display_name: string; bio: string; avatar_url: string | null;
@@ -35,7 +38,7 @@ export interface Profile {
   age_confirmed: boolean; character_ready: boolean; created_at: string;
 }
 export interface PublicProfile { id: string; username: string; display_name: string; bio: string; avatar_url: string | null; created_at: string; level: number; popularity: number }
-export interface MeData { profile: Profile | null; balance: number; inventory: string[]; state: unknown; currency: { code: string; symbol: string; name: string } }
+export interface MeData { profile: Profile | null; balance: number; inventory: string[]; state: unknown; currency: { code: string; symbol: string; name: string }; certificates?: string[]; employment?: { position_id: string; title: string; employee_no: string } | null; church?: { slug: string; name: string; role: string } | null }
 export interface MoneyResult { ok: boolean; error?: string; balance?: number; replay?: boolean; effects?: Record<string, number>; paid?: number; retry_in?: number; tx?: number }
 export interface SignUpInput { username: string; displayName: string; email: string; password: string; tos: boolean; privacy: boolean; age: boolean }
 
@@ -300,15 +303,15 @@ class Cloud {
         const m = metas[0];
         const prev = this.remote.get(id);
         if (prev) { prev.name = m.name; prev.username = m.username; prev.appearance = m.appearance; }
-        else this.remote.set(id, { id, name: m.name, username: m.username ?? '', appearance: m.appearance, x: 0, z: 0, yaw: 0, speed: 0, indoor: true, pose: 'none' });
+        else this.remote.set(id, { id, name: m.name, username: m.username ?? '', appearance: m.appearance, x: 0, z: 0, yaw: 0, speed: 0, indoor: true, pose: 'none', area: 'city', vehicle: null, activity: '' });
       }
       for (const id of [...this.remote.keys()]) if (!seen.has(id)) this.remote.delete(id);
       this.onRemote?.(this.remote);
     });
     ch.on('broadcast', { event: 'pos' }, ({ payload }) => {
-      const p = payload as { id: string; x: number; z: number; yaw: number; s: number; in: boolean; p?: Pose };
+      const p = payload as { id: string; x: number; z: number; yaw: number; s: number; in: boolean; p?: Pose; a?: Area; v?: RemoteVehicle | null; act?: string };
       const r = this.remote.get(p.id);
-      if (r) { r.x = p.x; r.z = p.z; r.yaw = p.yaw; r.speed = p.s; r.indoor = p.in; r.pose = p.p ?? 'none'; }
+      if (r) { r.x = p.x; r.z = p.z; r.yaw = p.yaw; r.speed = p.s; r.indoor = p.in; r.pose = p.p ?? 'none'; r.area = p.a ?? (p.in ? 'home' : 'city'); r.vehicle = p.v ?? null; r.activity = p.act ?? ''; }
     });
     ch.on('broadcast', { event: 'wave' }, ({ payload }) => {
       const p = payload as { from: string; name: string; to: string };
@@ -319,13 +322,17 @@ class Cloud {
     });
   }
   async updatePresence(name: string, username: string, appearance: Appearance) { await this.channel?.track({ name, username, appearance }); }
-  broadcastPos(x: number, z: number, yaw: number, speed: number, indoor: boolean, pose: Pose) {
+  /** Throttled position/animation/area sync (≈8 Hz while moving, 1 Hz when still). Never touches the database. */
+  broadcastPos(x: number, z: number, yaw: number, speed: number, indoor: boolean, pose: Pose, area: Area = 'city', vehicle: RemoteVehicle | null = null, activity = '') {
     if (!this.channel || !this.user) return;
     const now = performance.now();
-    if (now - this.lastSent < 120) return;
-    this.lastSent = now;
-    void this.channel.send({ type: 'broadcast', event: 'pos', payload: { id: this.user.id, x: +x.toFixed(2), z: +z.toFixed(2), yaw: +yaw.toFixed(2), s: speed, in: indoor, p: pose } });
+    const key = `${x.toFixed(1)}|${z.toFixed(1)}|${yaw.toFixed(1)}|${speed}|${pose}|${area}|${vehicle?.model ?? ''}|${activity}`;
+    const still = key === this.lastKey;
+    if (now - this.lastSent < (still ? 1000 : 120)) return;
+    this.lastSent = now; this.lastKey = key;
+    void this.channel.send({ type: 'broadcast', event: 'pos', payload: { id: this.user.id, x: +x.toFixed(2), z: +z.toFixed(2), yaw: +yaw.toFixed(2), s: speed, in: indoor, p: pose, a: area, v: vehicle, act: activity } });
   }
+  private lastKey = '';
   wave(toId: string, myName: string) {
     if (!this.channel || !this.user) return;
     void this.channel.send({ type: 'broadcast', event: 'wave', payload: { from: this.user.id, name: myName, to: toId } });

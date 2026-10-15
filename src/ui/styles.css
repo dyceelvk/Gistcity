@@ -246,7 +246,7 @@ body.touch .actionMenu .action kbd { display: none; }
   .locPill { padding: 8px 10px; }
   .objective { padding: 10px 11px; }
   .objective p { font-size: 10px; }
-  .rightCol { top: auto; transform: none; bottom: calc(190px + var(--sab)); gap: 7px; }
+  .rightCol { top: auto; transform: none; bottom: calc(190px + var(--sab)); gap: 7px; display: grid; grid-template-columns: 1fr 1fr; }
   .round { width: 46px; height: 46px; border-radius: 15px; font-size: 17px; }
   .round span { font-size: 7px; }
   .bottomBar { bottom: calc(14px + var(--sab)); }
@@ -255,13 +255,67 @@ body.touch .actionMenu .action kbd { display: none; }
   .panel { left: 10px; right: 10px; width: auto; top: auto; bottom: 0; transform: none; max-height: 78%; border-radius: 22px 22px 0 0; }
   #panel-style { max-height: 56%; }
   body.panel-open .leftCol, body.panel-open .rightCol, body.panel-open .bottomBar, body.panel-open .joy, body.panel-open #minimap, body.panel-open .actionMenu { display: none; }
-  .actionMenu { left: calc(16px + var(--sal)); right: calc(78px + var(--sar)); width: auto; bottom: calc(248px + var(--sab)); padding: 8px; }
+  .actionMenu { left: calc(16px + var(--sal)); right: calc(122px + var(--sar)); width: auto; bottom: calc(248px + var(--sab)); padding: 8px; }
   .actionMenu .action { padding: 8px; font-size: 12px; }
   .needs { gap: 6px; } .need i { width: 32px; }
   .achievements, .statGrid { grid-template-columns: 1fr 1fr; }
 }
 @media (max-height: 460px) {
   .leftCol .objective { display: none; }
-  .rightCol { flex-direction: row; bottom: auto; top: calc(8px + var(--sat)); right: 50%; transform: translateX(50%); }
+  .rightCol { display: flex; flex-direction: row; bottom: auto; top: calc(8px + var(--sat)); right: 50%; transform: translateX(50%); }
   .round { width: 40px; height: 40px; }
 }
+
+/* ---- living society: clock, driving, health, society panels ---- */
+.clockPill { font-variant-numeric: tabular-nums; font-weight: 800; letter-spacing: 1px; color: var(--lime); }
+body.night .clockPill { color: #9fd0ff; }
+.driveHud { position: absolute; left: 50%; bottom: calc(96px + var(--sab)); transform: translateX(-50%); display: flex; align-items: center; gap: 14px; background: rgba(12, 17, 13, 0.86); border: 1px solid var(--line); border-radius: 18px; padding: 10px 14px; backdrop-filter: blur(12px); z-index: 3; }
+.driveHud small { display: block; font-size: 10px; letter-spacing: 1px; color: var(--muted); font-weight: 700; }
+.driveHud strong { font-size: 26px; font-variant-numeric: tabular-nums; line-height: 1; }
+.driveHud strong em { font-size: 11px; font-style: normal; color: var(--muted); }
+.driveHud .primary { padding: 10px 14px; font-size: 12px; }
+body.driving .actionMenu, body.driving #runBtn { display: none; }
+.cardTop { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+.card.hero { border-color: rgba(165, 255, 56, 0.35); background: rgba(165, 255, 56, 0.06); }
+.card.row { display: flex; align-items: center; gap: 10px; }
+.card.row > div { flex: 1; }
+.card.row .ic { font-size: 22px; }
+.card .row, .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.card .row button, .row button { flex: 1; min-width: 120px; }
+.card h4, .panel h4 { margin: 14px 0 6px; font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); }
+.chip { display: inline-block; padding: 3px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; background: rgba(165, 255, 56, 0.15); color: var(--lime); white-space: nowrap; }
+.chip.ok { background: rgba(46, 204, 113, 0.2); color: #7ef0a9; }
+.chip.bad, .chip.warn { background: rgba(231, 76, 60, 0.2); color: #ff9b8f; }
+.chip.dim { background: rgba(255, 255, 255, 0.08); color: var(--muted); }
+.chip.live { background: #e74c3c; color: #fff; animation: pulse 1.4s infinite; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+.tip { font-size: 12px; color: var(--muted); margin: 6px 0 0; line-height: 1.45; }
+.small { font-size: 12px; }
+.warn { color: #ff9b8f; font-size: 13px; }
+button.off { opacity: 0.45; cursor: not-allowed; }
+.stepper { list-style: none; padding: 0; margin: 10px 0; display: grid; gap: 4px; }
+.stepper li { display: flex; gap: 10px; align-items: flex-start; padding: 6px 8px; border-radius: 10px; opacity: 0.55; }
+.stepper li b { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; background: rgba(255, 255, 255, 0.1); flex: none; }
+.stepper li small { display: block; color: var(--muted); font-size: 11px; }
+.stepper li.done { opacity: 0.9; } .stepper li.done b { background: #2ecc71; color: #0b1a0f; }
+.stepper li.cur { opacity: 1; background: rgba(165, 255, 56, 0.1); } .stepper li.cur b { background: var(--lime); color: #111; }
+.interview fieldset { border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; margin: 8px 0; }
+.interview legend { font-size: 13px; font-weight: 700; padding: 0 4px; }
+.interview label { display: block; font-size: 13px; padding: 4px 0; }
+.bar { display: block; height: 8px; border-radius: 6px; background: rgba(255, 255, 255, 0.1); overflow: hidden; margin: 8px 0; }
+.bar b { display: block; height: 100%; background: linear-gradient(90deg, #e74c3c, #f5c242, #2ecc71); }
+details { margin: 8px 0; }
+details summary { cursor: pointer; font-size: 12px; color: var(--muted); font-weight: 700; }
+.kv code, .cert code { font-size: 11px; background: rgba(255, 255, 255, 0.08); padding: 1px 5px; border-radius: 5px; }
+.kv.cert { align-items: flex-start; }
+i.dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.4); vertical-align: middle; margin-right: 4px; }
+button.mini { padding: 0 6px; font-size: 11px; border-radius: 6px; background: rgba(255,255,255,0.1); color: #fff; border: 0; }
+.swatch.on { outline: 2px solid var(--lime); outline-offset: 2px; }
+.need[data-level] span { font-size: 13px; }
+.sbody .card { flex-direction: column; align-items: stretch; gap: 4px; }
+.sbody .card.row { flex-direction: row; align-items: center; gap: 10px; }
+.sbody .card p { margin: 2px 0; font-size: 12px; color: #d9e0d6; line-height: 1.45; }
+.sbody .card > button { margin-top: 8px; }
+.sbody .kv { font-size: 12px; }
+.sbody .statGrid { margin: 10px 0; }
+@media (max-width: 720px) { .clockPill { display: none; } .driveHud { bottom: calc(150px + var(--sab)); } }

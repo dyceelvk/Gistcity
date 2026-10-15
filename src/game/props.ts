@@ -129,14 +129,17 @@ export function tree(parent: THREE.Object3D, x: number, z: number, scale = 1, co
 
 /* ------------------------------------------------------------- street stuff */
 
+/** Shared street-light material: the day/night cycle raises its emissive intensity after dusk. */
+export const LAMP_MAT = new THREE.MeshStandardMaterial({ color: '#fff4cf', emissive: '#ffe9a8', emissiveIntensity: 0.9, roughness: 0.4 });
+LAMP_MAT.userData.live = true;
+
 export function streetLamp(parent: THREE.Object3D, x: number, z: number, colliders?: AABB[]) {
   const g = new THREE.Group();
   g.position.set(x, 0, z);
   const m = mat('#3a3f3d', 0.6, 0.4);
   cyl(g, 0.06, 0.09, 5, m, 0, 2.5, 0, 8);
   box(g, 0.08, 0.08, 1.2, m, 0, 5, 0.55);
-  const lampM = new THREE.MeshStandardMaterial({ color: '#fff4cf', emissive: '#ffe9a8', emissiveIntensity: 0.9, roughness: 0.4 });
-  box(g, 0.3, 0.12, 0.5, lampM, 0, 4.95, 1.1);
+  box(g, 0.3, 0.12, 0.5, LAMP_MAT, 0, 4.95, 1.1);
   parent.add(g);
   colliders?.push({ minX: x - 0.15, maxX: x + 0.15, minZ: z - 0.15, maxZ: z + 0.15, h: 1 });
 }
@@ -170,6 +173,7 @@ export function car(parent: THREE.Object3D, x: number, z: number, rotY: number, 
   const cs = Math.abs(Math.cos(rotY)), sn = Math.abs(Math.sin(rotY));
   const hw = 0.9 * cs + 2.1 * sn, hd = 0.9 * sn + 2.1 * cs;
   colliders?.push({ minX: x - hw, maxX: x + hw, minZ: z - hd, maxZ: z + hd, h: 1.4 });
+  return g;
 }
 
 /** The yellow Lagos danfo. */
@@ -188,6 +192,7 @@ export function danfo(parent: THREE.Object3D, x: number, z: number, rotY: number
   const cs = Math.abs(Math.cos(rotY)), sn = Math.abs(Math.sin(rotY));
   const hw = 1.0 * cs + 2.4 * sn, hd = 1.0 * sn + 2.4 * cs;
   colliders?.push({ minX: x - hw, maxX: x + hw, minZ: z - hd, maxZ: z + hd, h: 2.3 });
+  return g;
 }
 
 export function keke(parent: THREE.Object3D, x: number, z: number, rotY: number, colliders?: AABB[]) {
@@ -201,6 +206,7 @@ export function keke(parent: THREE.Object3D, x: number, z: number, rotY: number,
   for (const wx of [-0.55, 0.55]) { const w = cyl(g, 0.25, 0.25, 0.15, blk, wx, 0.25, -0.8, 10); w.rotation.z = Math.PI / 2; }
   parent.add(g);
   colliders?.push({ minX: x - 1.2, maxX: x + 1.2, minZ: z - 1.2, maxZ: z + 1.2, h: 1.4 });
+  return g;
 }
 
 /** Low compound wall with a gate, around a lot. */

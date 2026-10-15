@@ -9,6 +9,8 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { mat } from './avatar';
+import { buildCivic } from './civic';
+import { bakeStatic } from './bake';
 import {
   AABB, box, cyl, signboard, palm, tree, streetLamp, bench, car, danfo, keke,
   compoundWall, kiosk, umbrella, generator, waterTank, satelliteDish, textTexture,
@@ -22,7 +24,7 @@ export interface Zone {
   radius: number;
   prompt: string;
   /** Extra data for the interaction (e.g. the seats of a bench). */
-  data?: { seats?: Seat[]; bedTop?: number };
+  data?: { seats?: Seat[]; bedTop?: number; bedYaw?: number; bedX?: number; bedZ?: number; public?: boolean; kind?: string; model?: string };
 }
 
 /** Somewhere a character can sit: position, facing yaw and seat height. */
@@ -72,7 +74,7 @@ interface BuildingOpts {
  * A building whose footprint is `w` (along x) by `d` (along z), centred at (x,z).
  * Windows are merged into a single mesh per building to keep draw calls low.
  */
-function building(parent: THREE.Object3D, colliders: AABB[], landmarks: Landmark[], x: number, z: number, w: number, d: number, floors: number, o: BuildingOpts = {}) {
+export function building(parent: THREE.Object3D, colliders: AABB[], landmarks: Landmark[], x: number, z: number, w: number, d: number, floors: number, o: BuildingOpts = {}) {
   const style = o.style ?? 'flat';
   const color = o.color ?? PALETTE[Math.floor(Math.abs(x * 7 + z * 13)) % PALETTE.length];
   const facing: Facing = o.facing ?? 's';
@@ -122,7 +124,8 @@ function building(parent: THREE.Object3D, colliders: AABB[], landmarks: Landmark
     }
   }
   if (winGeos.length) {
-    const wm = new THREE.Mesh(mergeGeometries(winGeos)!, mat('#2f4a55', 0.25, 0.4));
+    const wmat = mat('#2f4a55', 0.25, 0.4); wmat.userData.live = true;
+    const wm = new THREE.Mesh(mergeGeometries(winGeos)!, wmat);
     g.add(wm);
     const fm = new THREE.Mesh(mergeGeometries(frameGeos)!, trimM); fm.castShadow = true; g.add(fm);
   }
@@ -378,14 +381,19 @@ export function buildWorld(): World {
   // ---- outer ring (background streets) ----------------------------------
   let seed = 3;
   const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+  const civic = buildCivic(group, colliders, landmarks, animated);
+  zones.push(...civic.zones);
+  const free = (x: number, z: number, w: number, d: number) => !civic.exclude.some((e) => x + w / 2 > e.minX && x - w / 2 < e.maxX && z + d / 2 > e.minZ && z - d / 2 < e.maxZ);
   for (const s of [-1, 1]) {
     for (let z = -70; z <= 70; z += 14.5) {
       const floors = 2 + Math.floor(rnd() * 4), w = 9 + Math.floor(rnd() * 3), d = 10 + Math.floor(rnd() * 3);
-      building(group, colliders, landmarks, s * 64, z, d, w, floors, { facing: s < 0 ? 'e' : 'w', color: PALETTE[Math.floor(rnd() * PALETTE.length)], balconies: rnd() > 0.5, tank: rnd() > 0.5, dish: rnd() > 0.5 });
+      const opts = { facing: (s < 0 ? 'e' : 'w') as Facing, color: PALETTE[Math.floor(rnd() * PALETTE.length)], balconies: rnd() > 0.5, tank: rnd() > 0.5, dish: rnd() > 0.5 };
+      if (free(s * 66, z, d, w)) building(group, colliders, landmarks, s * 66, z, d, w, floors, opts);
     }
     for (let x = -42; x <= 42; x += 14.5) {
       const floors = 2 + Math.floor(rnd() * 4), w = 9 + Math.floor(rnd() * 3), d = 10 + Math.floor(rnd() * 3);
-      building(group, colliders, landmarks, x, s * 64, w, d, floors, { facing: s < 0 ? 's' : 'n', color: PALETTE[Math.floor(rnd() * PALETTE.length)], balconies: rnd() > 0.5, tank: rnd() > 0.5 });
+      const opts = { facing: (s < 0 ? 's' : 'n') as Facing, color: PALETTE[Math.floor(rnd() * PALETTE.length)], balconies: rnd() > 0.5, tank: rnd() > 0.5 };
+      if (free(x, s * 66, w, d)) building(group, colliders, landmarks, x, s * 66, w, d, floors, opts);
     }
   }
   // boundary trees (soft edge)
@@ -402,10 +410,10 @@ export function buildWorld(): World {
   for (const z of [-62, -44, -32, -14, 22, 40, 58]) streetLamp(group, 8.6, z, colliders);
   for (const x of [-66, -46, -30, -14, 14, 30, 46, 62]) streetLamp(group, x, -8.6, colliders);
   for (const x of [-62, -42, -24, 16, 36, 54]) streetLamp(group, x, 8.6, colliders);
-  car(group, 4.6, 24, 0, '#f1c40f', colliders); car(group, 4.6, 33, 0, '#ecf0f1', colliders);
-  car(group, -4.6, -30, Math.PI, '#2980b9', colliders); car(group, 4.6, -46, 0, '#7f8c8d', colliders);
-  danfo(group, -4.6, -42, Math.PI, colliders); danfo(group, 30, 4.6, Math.PI / 2, colliders);
-  keke(group, 4.6, -13, 0, colliders); keke(group, -24, 4.6, Math.PI / 2, colliders);
+  car(group, 5.1, 24, 0, '#f1c40f', colliders); car(group, 5.1, 33, 0, '#ecf0f1', colliders);
+  car(group, -5.1, -30, Math.PI, '#2980b9', colliders); car(group, 5.1, -46, 0, '#7f8c8d', colliders);
+  danfo(group, -5.1, -42, Math.PI, colliders); danfo(group, 30, 5.1, Math.PI / 2, colliders);
+  keke(group, 5.1, -13, 0, colliders); keke(group, -24, 5.1, Math.PI / 2, colliders);
   palm(group, -8, -60, 1.2, colliders); palm(group, 8, 60, 1.3, colliders); palm(group, 60, -8, 1, colliders); palm(group, -60, 8, 1.1, colliders);
 
   // ---- NPC walking loops (on sidewalks) --------------------------------------
@@ -421,7 +429,9 @@ export function buildWorld(): World {
     [V(-10, 22), V(-9.5, 30), V(-9.5, 40), V(-13, 44), V(-9.5, 12)],
   ];
 
+  paths.push(...civic.paths);
   const deliverySpots = [
+    ...civic.deliverySpots,
     { name: 'Gist Heights gate', x: 7.5, z: -24 },
     { name: 'Mama Nkechi Kitchen', x: -32, z: 7.5 },
     { name: 'Vibe Lounge', x: -9.5, z: 40 },
@@ -432,6 +442,8 @@ export function buildWorld(): World {
     { name: 'the north billboard', x: 7.5, z: -66 },
   ];
 
+  const baked = bakeStatic(group);
+  if (import.meta.env.DEV) console.info(`[gist] world baked: ${baked.removed} meshes → ${baked.meshes} draw calls`);
   return { group, colliders, zones, landmarks, roads, paths, spawn: new THREE.Vector3(7.5, 0, 18), deliverySpots, animated, bounds };
 }
 
@@ -445,6 +457,7 @@ export function buildSky(scene: THREE.Scene, animated: World['animated']) {
     fragmentShader: `uniform vec3 top; uniform vec3 mid; uniform vec3 bottom; varying vec3 vP; void main(){ float h = normalize(vP).y; vec3 c = h > 0.0 ? mix(mid, top, pow(h, 0.6)) : mix(mid, bottom, clamp(-h*6.0, 0.0, 1.0)); gl_FragColor = vec4(c, 1.0); }`,
   });
   const sky = new THREE.Mesh(skyGeo, skyMat);
+  sky.userData.uniforms = skyMat.uniforms;
   scene.add(sky);
   const cloudM = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 1, transparent: true, opacity: 0.9, emissive: '#dfe9f3', emissiveIntensity: 0.3 });
   const clouds: THREE.Group[] = [];

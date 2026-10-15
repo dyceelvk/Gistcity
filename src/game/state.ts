@@ -41,6 +41,12 @@ export const ACHIEVEMENTS: Record<string, { title: string; desc: string }> = {
   'big-boy': { title: 'Odogwu', desc: 'Held 50,000 G at once.' },
   'well-fed': { title: 'Belle Full', desc: 'Ate and drank in the city.' },
   'rested': { title: 'Soft Life', desc: 'Slept a full night in your own flat.' },
+  'graduate': { title: 'Graduate', desc: 'Earned a Unity College certificate.' },
+  'wheels': { title: 'Wheels', desc: 'Bought your first vehicle at Odogwu Motors.' },
+  'driver': { title: 'Road Warrior', desc: 'Drove a car through GistCity.' },
+  'civil-servant': { title: 'Civil Servant', desc: 'Got hired by the Government Secretariat.' },
+  'faithful': { title: 'Faithful', desc: 'Attended a service at Grace Chapel.' },
+  'citizen': { title: 'Full Citizen', desc: 'Visited every public institution in the city.' },
 };
 
 const KEY = 'gist_save_v1';

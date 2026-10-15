@@ -48,10 +48,15 @@ export class NpcManager {
     }
   }
 
+  /** Pedestrians beyond this distance are not drawn or animated (they keep walking their path). */
+  lodDist = 60;
+
   update(dt: number, playerPos: THREE.Vector3) {
     for (const n of this.npcs) {
       const pos = n.avatar.root.position;
-      if (n.pauseT > 0) { n.pauseT -= dt; n.avatar.animate(dt, 0); }
+      const near = Math.hypot(pos.x - playerPos.x, pos.z - playerPos.z) < (n.avatar.root.visible ? this.lodDist * 1.1 : this.lodDist);
+      n.avatar.root.visible = near;
+      if (n.pauseT > 0) { n.pauseT -= dt; if (near) n.avatar.animate(dt, 0); }
       else {
         const target = n.path[n.idx];
         const dx = target.x - pos.x, dz = target.z - pos.z;
@@ -67,7 +72,7 @@ export class NpcManager {
           let diff = yaw - n.yaw; while (diff > Math.PI) diff -= Math.PI * 2; while (diff < -Math.PI) diff += Math.PI * 2;
           n.yaw += diff * Math.min(1, dt * 8);
           n.avatar.root.rotation.y = n.yaw;
-          n.avatar.animate(dt, 1, n.speed);
+          if (near) n.avatar.animate(dt, 1, n.speed);
         }
       }
       if (n.bubble) { n.bubbleT -= dt; if (n.bubbleT <= 0) { n.avatar.root.remove(n.bubble); n.bubble = null; } }

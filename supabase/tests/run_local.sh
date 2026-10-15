@@ -17,11 +17,13 @@ for m in supabase/migrations/*.sql; do
 done
 echo "re-applying latest migration (idempotency)"
 $PSQL -d "$DB" -v ON_ERROR_STOP=1 -q -f "$(ls supabase/migrations/*.sql | tail -1)"
-echo "running supabase/tests/economy_test.sql"
-OUT=$(mktemp)
-if $PSQL -d "$DB" -v ON_ERROR_STOP=1 -q -t -f supabase/tests/economy_test.sql > "$OUT" 2>&1; then
-  grep -v '^\s*$' "$OUT" || true; rm -f "$OUT"
-else
-  grep -v '^\s*$' "$OUT" || true; rm -f "$OUT"
-  echo "FAIL: a GistCity SQL test failed (see above)"; exit 1
-fi
+for t in supabase/tests/*_test.sql; do
+  echo "running $t"
+  OUT=$(mktemp)
+  if $PSQL -d "$DB" -v ON_ERROR_STOP=1 -q -t -f "$t" > "$OUT" 2>&1; then
+    grep -v '^\s*$' "$OUT" || true; rm -f "$OUT"
+  else
+    grep -v '^\s*$' "$OUT" || true; rm -f "$OUT"
+    echo "FAIL: a GistCity SQL test failed (see above)"; exit 1
+  fi
+done

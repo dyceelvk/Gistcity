@@ -97,6 +97,23 @@ wardrobe, apartment and progress are saved in the browser (`localStorage`).
   actually do there: sit on benches / sofa / dining chairs, sleep in bed, order
   from a menu, start a shift, greet / view profile / send G to a real player,
   gist with NPCs. Keyboard `E` or `1–6`, or tap on mobile.
+- **The Civic Ring (society slice)** — a second ring of purposeful buildings,
+  each with an enterable interior, staff and real services:
+  **Unity College** (enrol, sit timed classes in a classroom, take the exam,
+  receive a server-issued certificate — e.g. the *GistCity Driver's Licence*),
+  **Odogwu Motors** (showroom; the sales desk only sells to licence holders;
+  bought vehicles are owned, insured with a plate and spawn parked outside),
+  **vehicles you can drive** (enter, drive with keyboard or touch, park, share
+  keys; traffic cars, danfo and keke on the ring road), **GistCity General
+  Hospital** (reception, doctor's treatment, ward), **Government Secretariat**
+  (employment desk with the 10-step hiring workflow, departments, payroll),
+  **Grace Chapel** (join/leave, seats, hourly services, voluntary offering basket,
+  church account and expenses), plus **Unity Park**, a gym, and a bank and
+  housing market marked *opening soon*. A **day/night cycle** (24 game-hours ≈
+  48 real minutes) lights windows and street lamps at dusk; the **City** HUD tab
+  lists who is registered / online / in your area / in an activity.
+  Everything works offline in practice mode and goes through the
+  `20261016000003_gistcity_society.sql` RPCs when Supabase is connected.
 - **Life stats** — level/XP, popularity, reputation, hustle, achievements.
 - **NPCs** who walk the streets and gist with you in Pidgin.
 - **Multiplayer** (with Supabase) — other citizens rendered live in the city via
@@ -215,12 +232,15 @@ The GISTCITY plan is built in tested phases (details in `docs/AUDIT.md`):
 1. ✅ Foundation — accounts, character creation, movement, interactions, needs
 2. ✅ Persistence & economy — ledger in G, server-authorised purchases/pay, saves
 3. ⏳ Social — friends, DMs with RLS, posts, blocks/reports, rate limits
-4. ⏳ Vehicles & dealership
-5. ⏳ Education & employment (certificates, government 10-step hiring, payroll)
-6. ⏳ Businesses & property
+   (presence tiers ✅, gifts/waves ✅, the rest pending)
+4. ✅ Vehicles & dealership — ownership, licence-gated purchase, driving, traffic
+5. ✅ Education & employment — timed classes, exams, server-issued certificates,
+   government 10-step hiring queue paid from payroll (first positions)
+6. ⏳ Businesses & property (bank and housing market are *opening soon*)
 7. ⏳ Family (consent-based marriage, family records, age progression)
-8. ⏳ Church (registration, seats, offerings, church accounts)
-9. ⏳ Polish — day/night, LOD/streaming, graphics settings, more districts
+8. ✅ Church — join/leave, seats, hourly services, offerings, church account,
+   expenses, pastor salary agreement and registration of new churches
+9. ⏳ Polish — day/night ✅, static batching/LOD ✅, graphics settings, more districts
 
 Places that are planned but not built yet are listed on the map as **coming soon**.
 

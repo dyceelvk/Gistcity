@@ -37,10 +37,13 @@ export interface HudHost {
   isCreating(): boolean;
   finishCreation(): Promise<void>;
   wakeUp(): void;
+  /** Leave the car (park it where it stands). */
+  exitVehicle(): void;
 }
+export interface PanelRenderer { render(id: string): void; stopTimers(): void }
 
 /** Places on the map that exist in the plan but are not built yet — shown honestly as coming soon. */
-export const COMING_SOON = ['🏫 School', '🏛️ Government office', '🏥 Hospital', '⛪ Church', '🚗 Dealership', '🏦 Bank'];
+export const COMING_SOON = ['🏦 Bank', '🏪 Businesses & property', '🏘️ Housing market', '💍 Marriage & family'];
 
 const $ = <T extends HTMLElement = HTMLElement>(sel: string) => document.querySelector(sel) as T;
 const $$ = <T extends HTMLElement = HTMLElement>(sel: string) => Array.from(document.querySelectorAll(sel)) as T[];
@@ -55,6 +58,8 @@ export class Hud {
   private currentZone: Zone | null = null;
   private currentActions: Action[] = [];
   onAction: ((index: number) => void) | null = null;
+  /** Society panels (school, government, church, …) render through this hook. */
+  panels: PanelRenderer | null = null;
 
   constructor(private host: HudHost) {
     const s = host.store;
@@ -67,6 +72,7 @@ export class Hud {
     $('#camBtn').addEventListener('click', () => host.cycleCamera());
     $('#accountBtn').addEventListener('click', () => this.open('account'));
     $('#wakeBtn').addEventListener('click', () => host.wakeUp());
+    $('#driveExit').addEventListener('click', () => host.exitVehicle());
     $('#resetBtn').addEventListener('click', () => { if (confirm('Reset your GIST save on this device? This cannot be undone.')) host.resetSave(); });
     $$('#storeTabs button').forEach((b) => b.addEventListener('click', () => { this.storeTab = b.dataset.tab as ItemCategory; this.renderStore(); }));
     const nameInput = $<HTMLInputElement>('#nameInput');
@@ -98,11 +104,13 @@ export class Hud {
     if (id === 'rank') void this.renderRank();
     if (id === 'map') this.drawBigMap();
     if (id === 'account') this.renderAccount();
+    this.panels?.render(id);
   }
   closeAll(resetCamera = true) {
     if (this.openId === 'style' && this.host.isCreating()) { this.toast('Finish your character first, then tap ENTER GISTCITY'); return; }
     $$('.panel').forEach((p) => p.classList.add('hidden'));
     document.body.classList.remove('panel-open');
+    this.panels?.stopTimers();
     if (this.openId === 'style' && resetCamera) this.host.setPortrait(false);
     if (this.openId === 'style') this.host.store.update(() => { /* flush name edits */ });
     this.openId = null;
@@ -150,7 +158,7 @@ export class Hud {
   /** Hunger / thirst / energy bars. */
   needs(n: Needs) {
     const set = (id: string, v: number) => { const el = $(id); el.style.width = `${Math.round(v)}%`; el.parentElement!.parentElement!.dataset.level = needLevel(v); el.parentElement!.parentElement!.title = `${Math.round(v)}%`; };
-    set('#needHunger', n.hunger); set('#needThirst', n.thirst); set('#needEnergy', n.energy);
+    set('#needHunger', n.hunger); set('#needThirst', n.thirst); set('#needEnergy', n.energy); set('#needHealth', n.health);
     if (this.openId === 'life') this.renderLife(this.host.store.state);
   }
   sleep(on: boolean, energy: number) {
@@ -158,11 +166,18 @@ export class Hud {
     if (on) { $('#sleepEnergy').textContent = `${Math.round(energy)}%`; $('#sleepFill').style.width = `${Math.round(energy)}%`; }
   }
   emote(e: string) { const el = $('#emote'); el.textContent = e; el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop'); }
+  /** Shared city clock (top bar). */
+  clock(text: string, night: boolean) { const el = $('#clock'); if (el.textContent !== text) el.textContent = text; document.body.classList.toggle('night', night); }
+  /** Driving overlay: speed + park button. */
+  drive(on: boolean, kmh = 0, name = '') {
+    const el = $('#driveHud'); el.classList.toggle('hidden', !on); document.body.classList.toggle('driving', on);
+    if (on) { $('#driveSpeed').textContent = String(Math.round(kmh)); if (name) $('#driveName').textContent = name; }
+  }
 
   /** Small modal input (amounts, notes). Resolves null when cancelled. */
-  ask(title: string, hint: string, placeholder: string): Promise<string | null> {
+  ask(title: string, hint: string, placeholder: string, numeric = true): Promise<string | null> {
     const root = $('#ask'), input = $<HTMLInputElement>('#askInput'), ok = $('#askOk'), cancel = $('#askCancel');
-    $('#askTitle').textContent = title; $('#askHint').textContent = hint; input.value = ''; input.placeholder = placeholder;
+    $('#askTitle').textContent = title; $('#askHint').textContent = hint; input.value = ''; input.placeholder = placeholder; input.inputMode = numeric ? 'numeric' : 'text';
     root.classList.remove('hidden'); setTimeout(() => input.focus(), 50);
     return new Promise((resolve) => {
       const done = (v: string | null) => { root.classList.add('hidden'); ok.removeEventListener('click', onOk); cancel.removeEventListener('click', onCancel); input.removeEventListener('keydown', onKey); resolve(v); };

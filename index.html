@@ -26,6 +26,7 @@
         <div class="pill levelPill" id="levelPill" title="Level"><small>LVL</small><strong id="levelNum">1</strong><i class="xpBar"><b id="xpFill"></b></i></div>
         <div class="pill wallet" title="Your G wallet"><span class="naira">G</span><div><small>WALLET</small><strong id="cash">10,000 G</strong></div></div>
         <button class="pill status" id="accountBtn" title="Account & sync"><span class="dot" id="statusDot"></span><span id="statusText">Offline</span></button>
+        <div class="pill clockPill" title="City time (shared by everyone)"><span id="clock">06:00</span></div>
       </div>
     </header>
 
@@ -39,6 +40,7 @@
         <div class="need" data-level="ok"><span>🍛</span><i><b id="needHunger"></b></i></div>
         <div class="need" data-level="ok"><span>💧</span><i><b id="needThirst"></b></i></div>
         <div class="need" data-level="ok"><span>⚡</span><i><b id="needEnergy"></b></i></div>
+        <div class="need" data-level="ok"><span>❤️</span><i><b id="needHealth"></b></i></div>
       </div>
     </div>
 
@@ -49,6 +51,8 @@
       <button class="round" data-open="jobs" aria-label="Hustle">💼<span>HUSTLE</span></button>
       <button class="round" data-open="map" aria-label="City map">🗺️<span>MAP</span></button>
       <button class="round" data-open="rank" aria-label="Rankings">🏆<span>RANK</span></button>
+      <button class="round" data-open="online" aria-label="Citizens online">👥<span>CITY</span></button>
+      <button class="round" data-open="vehicles" aria-label="My vehicles">🚗<span>CARS</span></button>
       <button class="round" id="camBtn" aria-label="Camera">◉<span>CAM</span></button>
     </nav>
 
@@ -67,6 +71,7 @@
 
     <div class="toast" id="toast"></div>
     <!-- sleeping overlay -->
+    <div class="driveHud hidden" id="driveHud"><div><small id="driveName">Driving</small><strong><span id="driveSpeed">0</span> <em>km/h</em></strong></div><button class="primary" id="driveExit">PARK &amp; EXIT</button></div>
     <div class="sleep hidden" id="sleep"><div class="sleepCard"><strong>Sleeping…</strong><p>Energy <span id="sleepEnergy">0%</span></p><i class="sleepBar"><b id="sleepFill"></b></i><button class="primary" id="wakeBtn">WAKE UP</button></div></div>
     <!-- small input dialog -->
     <div class="ask hidden" id="ask"><div class="askCard"><strong id="askTitle"></strong><p class="muted" id="askHint"></p><input id="askInput" inputmode="numeric" autocomplete="off" /><div class="askRow"><button class="ghost" id="askCancel">Cancel</button><button class="primary" id="askOk">SEND</button></div></div></div>
@@ -145,6 +150,42 @@
     <section class="panel hidden" id="panel-account">
       <div class="panelHead"><div><small>YOUR ACCOUNT</small><h2>Account</h2></div><button class="close" data-close>×</button></div>
       <div id="accountBody"></div>
+    </section>
+
+
+    <section class="panel hidden" id="panel-school">
+      <div class="panelHead"><div><small>UNITY COLLEGE</small><h2>Education</h2></div><button class="close" data-close>×</button></div>
+      <div id="schoolBody" class="sbody"></div>
+    </section>
+
+    <section class="panel hidden" id="panel-gov">
+      <div class="panelHead"><div><small>GOVERNMENT SECRETARIAT</small><h2>Employment</h2></div><button class="close" data-close>×</button></div>
+      <div id="govBody" class="sbody"></div>
+    </section>
+
+    <section class="panel hidden" id="panel-hospital">
+      <div class="panelHead"><div><small>GISTCITY GENERAL HOSPITAL</small><h2>Health</h2></div><button class="close" data-close>×</button></div>
+      <div id="hospitalBody" class="sbody"></div>
+    </section>
+
+    <section class="panel hidden" id="panel-church">
+      <div class="panelHead"><div><small>GRACE CHAPEL</small><h2>Church 🏠</h2></div><button class="close" data-close>×</button></div>
+      <div id="churchBody" class="sbody"></div>
+    </section>
+
+    <section class="panel hidden" id="panel-dealer">
+      <div class="panelHead"><div><small>ODOGWU MOTORS</small><h2>Showroom</h2></div><button class="close" data-close>×</button></div>
+      <div id="dealerBody" class="sbody"></div>
+    </section>
+
+    <section class="panel hidden" id="panel-vehicles">
+      <div class="panelHead"><div><small>YOUR GARAGE</small><h2>Vehicles</h2></div><button class="close" data-close>×</button></div>
+      <div id="vehiclesBody" class="sbody"></div>
+    </section>
+
+    <section class="panel hidden" id="panel-online">
+      <div class="panelHead"><div><small>GISTCITY</small><h2>Citizens</h2></div><button class="close" data-close>×</button></div>
+      <div id="onlineBody" class="sbody"></div>
     </section>
 
     <section class="panel hidden" id="panel-profile">

@@ -21,7 +21,7 @@ async function boot(): Promise<Boot> {
   if (!cloud.enabled) {
     const banner = document.createElement('div'); banner.className = 'practice'; banner.textContent = 'PRACTICE MODE · OFFLINE'; banner.title = 'Not connected to GistCity: progress is saved on this device only.';
     const col = document.querySelector('.leftCol'); if (col) col.prepend(banner);
-    return { state: loadLocal(), needsCharacter: false };
+    return { state: loadLocal(), needsCharacter: false, certificates: [] };
   }
   cloud.installBridge();
   await cloud.init();
@@ -56,7 +56,7 @@ async function boot(): Promise<Boot> {
     cash: me.balance,            // the server wallet is the truth
     inventory: me.inventory,     // and so is ownership
   };
-  return { state, needsCharacter: !profile.character_ready };
+  return { state, needsCharacter: !profile.character_ready, certificates: me.certificates ?? [], employment: me.employment ?? null, church: me.church ?? null };
 }
 
 (async () => {
