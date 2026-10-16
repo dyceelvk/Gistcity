@@ -224,6 +224,44 @@ export function cloudPuffTex(): THREE.Texture {
   });
 }
 
+/**
+ * Derive a tangent-space normal map from a texture's luminance (sobel).
+ * This is what makes plaster, tiles and asphalt react to light instead of
+ * reading as flat colour.
+ */
+export function normalFor(key: string, src: THREE.Texture, strength = 1.6): THREE.Texture {
+  return memo('nrm:' + key, () => {
+    const img = src.image as HTMLCanvasElement;
+    const s = img.width;
+    const data = img.getContext('2d')!.getImageData(0, 0, s, s).data;
+    const h = new Float32Array(s * s);
+    for (let i = 0; i < s * s; i++) h[i] = (data[i * 4]! * 0.32 + data[i * 4 + 1]! * 0.52 + data[i * 4 + 2]! * 0.16) / 255;
+    const c = document.createElement('canvas');
+    c.width = c.height = s;
+    const g = c.getContext('2d')!;
+    const out = g.createImageData(s, s);
+    const at = (x: number, y: number) => h[((y + s) % s) * s + ((x + s) % s)]!;
+    for (let y = 0; y < s; y++) {
+      for (let x = 0; x < s; x++) {
+        const dx = (at(x - 1, y - 1) + 2 * at(x - 1, y) + at(x - 1, y + 1)) - (at(x + 1, y - 1) + 2 * at(x + 1, y) + at(x + 1, y + 1));
+        const dy = (at(x - 1, y - 1) + 2 * at(x, y - 1) + at(x + 1, y - 1)) - (at(x - 1, y + 1) + 2 * at(x, y + 1) + at(x + 1, y + 1));
+        const nx = dx * strength, ny = dy * strength, nz = 1;
+        const l = Math.sqrt(nx * nx + ny * ny + nz * nz);
+        const k = (y * s + x) * 4;
+        out.data[k] = Math.round(((nx / l) * 0.5 + 0.5) * 255);
+        out.data[k + 1] = Math.round(((ny / l) * 0.5 + 0.5) * 255);
+        out.data[k + 2] = Math.round(((nz / l) * 0.5 + 0.5) * 255);
+        out.data[k + 3] = 255;
+      }
+    }
+    g.putImageData(out, 0, 0);
+    const t = new THREE.CanvasTexture(c);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.anisotropy = 4;
+    return t;
+  });
+}
+
 /** Clone a texture with its own repeat (images stay shared). */
 export function tiled(t: THREE.Texture, rx: number, ry: number): THREE.Texture {
   const c = t.clone();
@@ -237,7 +275,8 @@ export function wallMaterial(color: string): THREE.MeshStandardMaterial {
   const key = 'wallM:' + color;
   let m = cache.get(key) as unknown as THREE.MeshStandardMaterial | undefined;
   if (!m) {
-    m = new THREE.MeshStandardMaterial({ map: plasterTex(color), roughness: 0.92, metalness: 0.02 });
+    const map = plasterTex(color);
+    m = new THREE.MeshStandardMaterial({ map, normalMap: normalFor('plaster', map, 0.7), normalScale: new THREE.Vector2(0.55, 0.55), roughness: 0.92, metalness: 0.02 });
     cache.set(key, m as unknown as THREE.Texture);
   }
   return m;
@@ -247,7 +286,8 @@ export function tiledRoofMaterial(color: string): THREE.MeshStandardMaterial {
   const key = 'roofM:' + color;
   let m = cache.get(key) as unknown as THREE.MeshStandardMaterial | undefined;
   if (!m) {
-    m = new THREE.MeshStandardMaterial({ map: roofTilesTex(color), roughness: 0.88, metalness: 0.04 });
+    const map = roofTilesTex(color);
+    m = new THREE.MeshStandardMaterial({ map, normalMap: normalFor('tiles', map, 2.4), normalScale: new THREE.Vector2(1.1, 1.1), roughness: 0.88, metalness: 0.04 });
     cache.set(key, m as unknown as THREE.Texture);
   }
   return m;

@@ -14,7 +14,7 @@ import { scaleBoxUVs } from './props';
 import { buildCivic } from './civic';
 import { bakeStatic } from './bake';
 import {
-  AABB, box, cyl, signboard, palm, tree, streetLamp, bench, car, danfo, keke,
+  AABB, box, cyl, signboard, palm, tree, bush, streetLamp, bench, car, danfo, keke,
   compoundWall, kiosk, umbrella, generator, waterTank, satelliteDish, textTexture,
 } from './props';
 
@@ -86,6 +86,11 @@ export function building(parent: THREE.Object3D, colliders: AABB[], landmarks: L
   g.position.set(x, 0, z);
   parent.add(g);
 
+  const darken = (hex: string, k = 0.82) => {
+    const n = parseInt(hex.slice(1), 16);
+    const r = Math.floor(((n >> 16) & 255) * k), gg = Math.floor(((n >> 8) & 255) * k), b = Math.floor((n & 255) * k);
+    return '#' + ((r << 16) | (gg << 8) | b).toString(16).padStart(6, '0');
+  };
   const wallM = wallMaterial(color);
   const trimM = mat('#efeae0', 0.88);
   const darkM = mat('#33373c', 0.75);
@@ -96,14 +101,19 @@ export function building(parent: THREE.Object3D, colliders: AABB[], landmarks: L
   const fd = facing === 'n' || facing === 's' ? d : w;   // depth (front to back)
   box(g, fw, h, fd, wallM, 0, h / 2, 0);
   box(g, fw + 0.1, 0.5, fd + 0.1, mat('#857f76', 0.95), 0, 0.25, 0); // plinth
+  box(g, fw + 0.18, 1.15, fd + 0.18, wallMaterial(darken(color)), 0, 0.72, 0); // painted base band
 
+  // floor band ledges — break the facade so it does not read as one extruded box
+  for (let f = 1; f < floors; f++) box(g, fw + 0.3, 0.22, fd + 0.3, trimM, 0, f * fh - 0.06, 0);
   // windows (merged)
   const winGeos: THREE.BufferGeometry[] = [];
   const frameGeos: THREE.BufferGeometry[] = [];
+  const sillGeos: THREE.BufferGeometry[] = [];
   const acGeos: THREE.BufferGeometry[] = [];
   const addWindow = (wx: number, wy: number, wz: number, ry: number, ww = 1.1, wh = 1.3) => {
     const gw = new THREE.BoxGeometry(ww, wh, 0.08); gw.rotateY(ry); gw.translate(wx, wy, wz); winGeos.push(gw);
     const gf = new THREE.BoxGeometry(ww + 0.18, wh + 0.18, 0.05); gf.rotateY(ry); gf.translate(wx, wy, wz); frameGeos.push(gf);
+    const gs = new THREE.BoxGeometry(ww + 0.36, 0.1, 0.26); gs.rotateY(ry); gs.translate(wx, wy - wh / 2 - 0.12, wz); sillGeos.push(gs);
   };
   const startY = style === 'shop' ? fh : 0;
   for (let f = (style === 'shop' ? 1 : 0); f < floors; f++) {
@@ -131,6 +141,7 @@ export function building(parent: THREE.Object3D, colliders: AABB[], landmarks: L
     g.add(wm);
     const fm = new THREE.Mesh(mergeGeometries(frameGeos)!, trimM); fm.castShadow = true; g.add(fm);
   }
+  if (sillGeos.length) { const sm = new THREE.Mesh(mergeGeometries(sillGeos)!, trimM); sm.castShadow = true; g.add(sm); }
   if (acGeos.length) { const am = new THREE.Mesh(mergeGeometries(acGeos)!, mat('#d9d9d4', 0.6)); am.castShadow = true; g.add(am); }
 
   // door (front, ground floor)
@@ -138,6 +149,12 @@ export function building(parent: THREE.Object3D, colliders: AABB[], landmarks: L
     box(g, 1.3, 2.3, 0.1, mat('#5a3b2a', 0.7), 0, 1.15, fd / 2 + 0.04);
     box(g, 1.7, 0.15, 0.9, darkM, 0, 2.45, fd / 2 + 0.4); // small canopy
     box(g, 2.0, 0.3, 1.0, mat('#9a9389', 0.9), 0, 0.15, fd / 2 + 0.5); // step
+    // stoop: posts + porch slab so the entrance has depth
+    if (style === 'duplex' || style === 'bungalow') {
+      box(g, 3.2, 0.16, 1.9, trimM, 0, 2.62, fd / 2 + 1.05);
+      for (const px of [-1.35, 1.35]) cyl(g, 0.09, 0.11, 2.5, trimM, px, 1.3, fd / 2 + 1.75, 8);
+      box(g, 3.4, 0.12, 2.05, mat(darken(color), 0.9), 0, 2.78, fd / 2 + 1.05); // porch fascia
+    }
   } else {
     // shop front: glass + door + awning + sign
     box(g, fw - 1.2, fh - 1.0, 0.1, mat('#1c2b36', 0.12, 0.65), 0, fh / 2 + 0.15, fd / 2 + 0.03);
@@ -444,6 +461,26 @@ export function buildWorld(): World {
   danfo(group, -5.1, -42, Math.PI, colliders); danfo(group, 30, 5.1, Math.PI / 2, colliders);
   keke(group, 5.1, -13, 0, colliders); keke(group, -24, 5.1, Math.PI / 2, colliders);
   palm(group, -8, -60, 1.2, colliders); palm(group, 8, 60, 1.3, colliders); palm(group, 60, -8, 1, colliders); palm(group, -60, 8, 1.1, colliders);
+
+  // ---- greenery: shrubs, flower beds, garden tufts -------------------------
+  {
+    // flower ring on the roundabout
+    const petalM = [mat('#e74c3c', 0.85), mat('#f5c242', 0.85), mat('#e875c0', 0.85), mat('#f2f2f2', 0.85)];
+    const stemM = mat('#2e7d32', 0.9);
+    const flowerGeo = new THREE.SphereGeometry(0.12, 6, 5);
+    const stemGeo = new THREE.CylinderGeometry(0.02, 0.02, 0.24, 4);
+    for (let i = 0; i < 42; i++) {
+      const a = (i / 42) * Math.PI * 2 + (i % 3) * 0.08;
+      const r = 5.1 + (i % 4) * 0.42;
+      const x = Math.cos(a) * r, z = Math.sin(a) * r;
+      const stem = new THREE.Mesh(stemGeo, stemM); stem.position.set(x, 0.42, z); group.add(stem);
+      const petal = new THREE.Mesh(flowerGeo, petalM[i % 4]!); petal.position.set(x, 0.58, z); group.add(petal);
+    }
+    for (const [bx, bz, bs] of [[-7.8, -7.8, 1], [7.8, -7.8, 0.9], [-7.8, 7.8, 0.95], [7.8, 7.8, 1.05], [-23.2, -8.8, 0.85], [-21.8, -13.6, 1], [14.2, -18.6, 1], [12.8, -28.8, 0.9], [-9.2, 44.8, 1], [10.2, 46.2, 0.85], [-46.2, -8.2, 1], [46.2, 8.2, 0.95], [24.8, 9.4, 0.9], [-15.4, 19.2, 1.05]] as const) {
+      bush(group, bx, bz, bs);
+      if (bs > 0.95) bush(group, bx + 1.3, bz + 0.7, bs * 0.72, 1);
+    }
+  }
 
   // ---- street life: power lines, bus canopy, mechanic corner, market spill --
   {

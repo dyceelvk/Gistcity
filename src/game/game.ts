@@ -6,6 +6,36 @@
 import * as THREE from 'three';
 import { makeCharacter, type Character, type Pose } from './character';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
+
+/** Colour grade: split-tone, contrast, saturation, vignette — the "expensive" finish. */
+const GradeShader = {
+  uniforms: {
+    tDiffuse: { value: null as THREE.Texture | null },
+    vignette: { value: 0.24 }, saturation: { value: 1.06 }, contrast: { value: 1.04 }, warmth: { value: 0.022 },
+  },
+  vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
+  fragmentShader: `
+    uniform sampler2D tDiffuse; uniform float vignette, saturation, contrast, warmth;
+    varying vec2 vUv;
+    void main(){
+      vec4 c = texture2D(tDiffuse, vUv);
+      vec3 s = pow(max(c.rgb, 0.0), vec3(0.4545));           // grade in display space
+      float l = dot(s, vec3(0.299, 0.587, 0.114));
+      s += (l - 0.5) * warmth * vec3(1.0, 0.55, -0.35);      // warm highs, gentle cool shadows
+      s = (s - 0.5) * contrast + 0.5;
+      float g = dot(s, vec3(0.299, 0.587, 0.114));
+      s = mix(vec3(g), s, saturation);
+      float d = distance(vUv, vec2(0.5, 0.46));
+      s *= 1.0 - vignette * smoothstep(0.42, 0.92, d);
+      gl_FragColor = vec4(pow(max(s, 0.0), vec3(2.2)), c.a);
+    }`,
+};
 import { CameraRig } from './camera';
 import { Input } from './input';
 import { resolveCircle } from './physics';
@@ -139,6 +169,7 @@ export class Game implements HudHost, SocietyHost {
 
   private sunDisc: THREE.Sprite;
   private shadowsTick = 0;
+  private composer: EffectComposer | null = null;
   /** QuickCash POS — apply → approved → shift behind the counter under the shop camera. */
   private pos: PosShift | null = null;
   private posApprovalAt = 0;
@@ -158,6 +189,7 @@ export class Game implements HudHost, SocietyHost {
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, touch ? 1.25 : 1.6));
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.12;
+
     this.renderer.setSize(innerWidth, innerHeight);
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -331,6 +363,15 @@ export class Game implements HudHost, SocietyHost {
       localStorage.setItem('gist_onboarded', '1');
       this.creating = true;
       setTimeout(() => { this.hud.open('style'); this.hud.toast('Welcome to GistCity! Create your character, then enter the city ✦', 4500); }, 500);
+    }
+    // post pipeline: AO + bloom + grade. Quality tiers — full on desktop GPU,
+    // bloom+grade on touch, grade-only on software rendering (keeps it lag-free).
+    {
+      const gl = this.renderer.getContext();
+      const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+      const rname = dbg ? String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL)) : '';
+      const soft = /swiftshader|software|llvmpipe/i.test(rname);
+      this.buildComposer(matchMedia('(pointer: coarse)').matches ? 1 : soft ? 0 : 2);
     }
     this.renderer.setAnimationLoop(() => this.frame());
   }
@@ -638,8 +679,9 @@ export class Game implements HudHost, SocietyHost {
   private async consume(c: Consumable) {
     if (this.busy) return;
     this.busy = true;
+    try {
     const r = await this.economy.buy(c.id);
-    if (!r.ok) { this.busy = false; this.hud.toast(r.message ?? 'Could not order'); this.refreshActions(); return; }
+    if (!r.ok) { this.hud.toast(r.message ?? 'Could not order'); return; }
     const fx = (r.effects ?? c.effects) as Record<string, number>;
     const isDrink = c.kind === 'drink', isService = c.kind === 'service';
     const dur = isService ? 1.6 : isDrink ? 2.8 : 3.6;
@@ -649,6 +691,12 @@ export class Game implements HudHost, SocietyHost {
     this.pushActivityChip();
     this.hud.toast(`${c.icon} ${isService ? 'Enjoying' : isDrink ? 'Drinking' : 'Eating'} ${c.name}…`, Math.round(dur * 1000));
     this.hud.emote(isService ? '🪩' : isDrink ? '🥤' : '😋');
+    // Order placed and paid for — release the tap guard now. The needs steps
+    // tick out underneath and the activity machine still serialises the
+    // eating / drinking animations, so a second order can start the moment the
+    // current animation ends instead of silently doing nothing.
+    this.busy = false;
+    this.refreshActions();
     // needs recover through the sequence, so the bars move while you eat / drink
     const steps = 3;
     for (let i = 0; i < steps; i++) {
@@ -669,8 +717,11 @@ export class Game implements HudHost, SocietyHost {
     this.pushActivityChip();
     this.hud.toast(`${c.line}${fx.hunger ? ` · hunger +${fx.hunger}` : ''}${fx.thirst ? ` · thirst +${fx.thirst}` : ''}${fx.popularity ? ` · +${fx.popularity} popularity` : ''}`, 3500);
     if (!isService) this.award('well-fed');
-    this.busy = false;
-    this.refreshActions();
+    } finally {
+      // never leave busy jammed: one failed postlude must not block every later meal
+      this.busy = false;
+      this.refreshActions();
+    }
   }
   private playPitch() {
     this.visit('pitch');
@@ -1247,9 +1298,36 @@ export class Game implements HudHost, SocietyHost {
 
   /* --------------------------------------------------------------- loop */
 
+  private buildComposer(q: number) {
+    if (q <= 0) { this.composer = null; return; } // software GL: direct render, no fullscreen passes
+    const w = innerWidth, h = innerHeight;
+    const pr = Math.min(devicePixelRatio, matchMedia('(pointer: coarse)').matches ? 1.25 : 1.6);
+    const composer = new EffectComposer(this.renderer);
+    composer.setPixelRatio(pr);
+    composer.setSize(w, h);
+    composer.addPass(new RenderPass(this.scene, this.camera));
+    if (q >= 2) {
+      const gtao = new GTAOPass(this.scene, this.camera, w, h);
+      gtao.blendIntensity = 0.9;
+      composer.addPass(gtao);
+    }
+    if (q >= 1) {
+      composer.addPass(new UnrealBloomPass(new THREE.Vector2(w, h), 0.20, 0.5, 0.93));
+    }
+    composer.addPass(new ShaderPass(GradeShader));
+    composer.addPass(new OutputPass());
+    this.composer = composer;
+  }
+
+  private draw() {
+    if (this.composer) this.composer.render();
+    else this.renderer.render(this.scene, this.camera);
+  }
+
   private resize() {
     this.camera.aspect = innerWidth / innerHeight; this.camera.updateProjectionMatrix();
     this.renderer.setSize(innerWidth, innerHeight);
+    this.composer?.setSize(innerWidth, innerHeight);
   }
 
   private frame() {
@@ -1321,7 +1399,7 @@ export class Game implements HudHost, SocietyHost {
       const so = this.day.sunOffset(); this.sun.position.set(pos.x + so.x, so.y, pos.z + so.z); this.sun.target.position.copy(pos); this.sun.target.updateMatrixWorld();
       for (const m of this.markers.children) if (m.visible) animateMarker(m as THREE.Group, t, m.userData.phase);
       this.rig.update(dt, pos, this.yaw, [], false);
-      this.renderer.render(this.scene, this.camera);
+      this.draw();
       this.miniTimer += dt; if (this.miniTimer > 0.12) { this.miniTimer = 0; this.hud.drawMinimap(); }
       return;
     }
@@ -1426,7 +1504,7 @@ export class Game implements HudHost, SocietyHost {
 
     // camera
     this.rig.update(dt, pos, this.yaw, colliders, this.indoor);
-    this.renderer.render(this.scene, this.camera);
+    this.draw();
 
     this.miniTimer += dt;
     if (this.miniTimer > 0.12) { this.miniTimer = 0; this.hud.drawMinimap(); }

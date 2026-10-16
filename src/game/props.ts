@@ -179,6 +179,25 @@ export function tree(parent: THREE.Object3D, x: number, z: number, scale = 1, co
   return g;
 }
 
+/** Low garden shrub — crossed leaf billboards over a dark core. */
+export function bush(parent: THREE.Object3D, x: number, z: number, scale = 1, hue = 0) {
+  const g = new THREE.Group();
+  g.position.set(x, 0, z); g.scale.setScalar(scale);
+  const coreM = mat(hue ? '#2a5c2f' : '#24542e', 0.95);
+  const core = new THREE.Mesh(new THREE.IcosahedronGeometry(0.55, 1), coreM);
+  core.position.y = 0.5; core.scale.set(1, 0.8, 1); core.castShadow = true; g.add(core);
+  const leafM = new THREE.MeshStandardMaterial({ map: leafTex(), alphaTest: 0.42, side: THREE.DoubleSide, roughness: 0.92, metalness: 0 });
+  for (let i = 0; i < 3; i++) {
+    const pl = new THREE.Mesh(new THREE.PlaneGeometry(1.7, 1.5), leafM);
+    pl.position.y = 0.62;
+    pl.rotation.y = (i / 3) * Math.PI;
+    pl.castShadow = true;
+    g.add(pl);
+  }
+  parent.add(g);
+  return g;
+}
+
 /* ------------------------------------------------------------- street stuff */
 
 /** Shared street-light material: the day/night cycle raises its emissive intensity after dusk. */
@@ -289,11 +308,21 @@ export function keke(parent: THREE.Object3D, x: number, z: number, rotY: number,
 
 /** Low compound wall with a gate, around a lot. */
 export function compoundWall(parent: THREE.Object3D, cx: number, cz: number, w: number, d: number, gateSide: 'n' | 's' | 'e' | 'w', colliders?: AABB[], color = '#cfc6b4') {
-  const m = mat(color, 0.95), capM = mat('#8d8a7f', 0.9), gateM = mat('#2f3f4a', 0.5, 0.5);
+  const m = wallMaterial(color), capM = mat('#8d8a7f', 0.9), gateM = mat('#2f3f4a', 0.5, 0.5);
+  const bandM = wallMaterial('#b3a68f');
   const h = 1.9, t = 0.22, gate = 3.2;
   const seg = (x: number, z: number, len: number, alongX: boolean) => {
     box(parent, alongX ? len : t, h, alongX ? t : len, m, x, h / 2, z);
+    box(parent, alongX ? len : t + 0.06, 0.55, alongX ? t + 0.06 : len, bandM, x, 0.28, z); // painted base band
     box(parent, alongX ? len : t + 0.08, 0.1, alongX ? t + 0.08 : len, capM, x, h + 0.05, z);
+    // piers every ~3.5 m so the run never reads as one blank slab
+    const n = Math.max(1, Math.round(len / 3.5));
+    for (let i = 0; i <= n; i++) {
+      const off = -len / 2 + (i / n) * len;
+      const px = alongX ? x + off : x, pz = alongX ? z : z + off;
+      box(parent, 0.38, h + 0.32, 0.38, m, px, (h + 0.32) / 2, pz);
+      box(parent, 0.5, 0.12, 0.5, capM, px, h + 0.36, pz);
+    }
     colliders?.push(alongX
       ? { minX: x - len / 2, maxX: x + len / 2, minZ: z - t / 2, maxZ: z + t / 2, h }
       : { minX: x - t / 2, maxX: x + t / 2, minZ: z - len / 2, maxZ: z + len / 2, h });

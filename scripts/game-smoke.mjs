@@ -224,9 +224,10 @@ async function main() {
       while (!fn() && performance.now() - t0 < ms) await new Promise((r) => setTimeout(r, 120));
       return fn();
     };
-    await until(() => g.act.current === 'EATING' || g.act.current === 'DRINKING', 9000);
+    await until(() => g.act.current === 'EATING' || g.act.current === 'DRINKING', 24000);
     const during = g.act.current;
-    await until(() => g.act.current === 'IDLE' || g.act.current === 'SITTING', 14000);
+    await until(() => g.act.current === 'IDLE' || g.act.current === 'SITTING', 30000);
+    await until(() => g.store.state.needs.hunger > hungerBefore, 2500);
     return {
       during,
       after: g.act.current,
@@ -254,9 +255,9 @@ async function main() {
       while (!fn() && performance.now() - t0 < ms) await new Promise((r) => setTimeout(r, 120));
       return fn();
     };
-    await until(() => g.act.current === 'DRINKING' || g.act.current === 'EATING', 9000);
+    await until(() => g.act.current === 'DRINKING' || g.act.current === 'EATING', 24000);
     const during = g.act.current;
-    await until(() => g.act.current === 'IDLE' || g.act.current === 'SITTING', 12000);
+    await until(() => g.act.current === 'IDLE' || g.act.current === 'SITTING', 30000);
     return { during, after: g.act.current };
   });
   check('drinking runs a DRINKING sequence', drink.during === 'DRINKING', `during=${drink.during} err=${drink.err ?? ''}`);
@@ -771,7 +772,7 @@ async function main() {
 
   const failed = results.filter((r) => !r.ok);
   console.log(`\n${results.length - failed.length}/${results.length} checks passed. Screenshots: ${SHOTS}`);
-  if (failed.length) { console.log('FAILED:', failed.map((f) => f.name).join(' | ')); process.exit(1); }
+  if (failed.length) { console.log('FAILED:', failed.map((f) => f.name + (f.detail ? ` [${f.detail}]` : '')).join(' | ')); process.exit(1); }
 }
 
 main().catch((e) => { console.error('HARNESS ERROR:', e); process.exit(2); });

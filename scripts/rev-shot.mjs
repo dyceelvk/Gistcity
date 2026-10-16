@@ -15,7 +15,8 @@ await page.evaluateOnNewDocument(() => {
 });
 await page.goto('http://127.0.0.1:5173/', { waitUntil: 'domcontentloaded', timeout: 60000 });
 await page.waitForFunction(() => window.__gist && window.__gist.avatar, { timeout: 90000 });
-const [tx, tz, tyaw] = process.argv.slice(3).map(Number);
+const [tx, tz, tyaw, fx] = process.argv.slice(3).map(Number);
+if (!Number.isNaN(fx)) { await page.evaluate((q) => (window.__gist.buildComposer(q)), fx); await new Promise(r => setTimeout(r, 600)); }
 await new Promise(r => setTimeout(r, 3200));
 if (!Number.isNaN(tx)) {
   await page.evaluate((x, z, yaw) => {

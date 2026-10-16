@@ -437,3 +437,62 @@ balconies/railings and shopfronts deserve the same detail pass; interiors/furnit
 untouched; UI colour scheme from the review is unchanged in this cut; cloud puffs
 tuneable; per-customer POS fees still need the online RPC (§11/§14).
 
+
+## 16. Realism pass #2 — light-reacting surfaces, filmic post, architectural depth (2026-10-16)
+
+The first realism pass (textures, foliage, roofs, ACES) still read as a "block
+build game" to the reviewer. This pass attacks the three things that make a
+render read as professional: light-reacting surfaces, filmic post-processing and
+architectural depth — plus a real player-facing defect the work uncovered.
+
+**Light-reacting surfaces (`textures.ts`).** New `normalFor(key, src, strength)`
+derives a tangent-space normal map from any procedural texture's luminance
+(sobel). `wallMaterial` (normalScale 0.55) and `tiledRoofMaterial` (2.4, tiled
+1.1×) now carry normal maps, so plaster and roof tiles respond to the sun
+instead of looking painted-on.
+
+**Filmic post pipeline (`game.ts`).** `EffectComposer` with `RenderPass` →
+`GTAOPass` (q≥2, blendIntensity 0.9) → `UnrealBloomPass` 0.20/0.5/0.93 (q≥1) →
+`GradeShader` → `OutputPass`. `GradeShader` is a display-space split-tone
+(0.022 warmth), saturation 1.06, contrast 1.04, vignette 0.24 — grading the
+linear buffer directly blue-shifted dark asphalt, so the shader round-trips
+through `pow(0.4545)` / `pow(2.2)`. Quality tiers via `buildComposer(q)`:
+**2** desktop GPU (GTAO + bloom + grade) · **1** touch (bloom + grade) · **0**
+software GL (direct render — no fullscreen passes, frame cadence preserved).
+Auto-detect uses `WEBGL_debug_renderer_info` (swiftshader/llvmpipe) and
+`matchMedia('(pointer: coarse)')`. ACES tone mapping + exposure 1.12.
+
+**Architectural depth (`world.ts`, `props.ts`).** Every building gains a painted
+two-tone base band, floor-band ledges between storeys, window sills and a
+porch/stoop on duplexes and bungalows. Compound walls (citywide) get textured
+plaster, a painted base band, a coping cap and **piers every ~3.5 m** so no run
+reads as one blank slab. Greenery: roundabout flower ring (42 flowers, 4
+colours) and 14 bush placements (`props.bush`).
+
+**Defect fixed — meal orders could silently do nothing (player-facing).**
+`Game.consume` guarded `this.busy` across its whole body, including the three
+`setTimeout` needs-steps. On slower frames the activity state machine ends
+`EATING` before those timers drain, so a second order tapped in that window was
+a silent no-op (paid-looking tap, no drink, no animation) — the smoke's drinking
+check failed on it (`during=IDLE err=`). Probe (`scripts/probe-meals.mjs`) showed
+`busy: true` with `act: 'IDLE'` and no page error. Fix: the tap guard now covers
+order placement only (released right after `act.enter`); the needs steps tick out
+underneath and the activity machine still serialises the animations. `consume`
+is additionally wrapped in `try/finally` so a failed postlude can never jam
+`busy` again.
+
+**Verification.** `scripts/rev-err.mjs` (console/pageerror + composer passes):
+clean. `scripts/probe-meals.mjs`: eat → DRINKING → thirst 85→100, busy clears.
+`scripts/game-smoke.mjs`: **80/80** (phase polls given honest margins — the
+checks' semantics are unchanged; hunger now polled briefly after the sequence
+since the last needs-step can land on the frame after `IDLE`; failure summary
+now prints details). `node scripts/db-tests.mjs`: all steps pass.
+`./node_modules/.bin/tsc --noEmit` and `npm run build`: clean. Visual: `gfx-post`
+(tier 0), `gfx-homes2` (tier 2 GTAO+bloom+grade), `gfx-phone` (tier 1) verified.
+
+**Remaining defects / follow-ups:** window glass is still flat-dark at distance;
+balcony railings and shopfront glazing deserve the same detail pass; the HUD's
+colour identity is still the old scheme; optional dusk/night saturation pass;
+interiors/furniture untouched. Software-GL users now get the pre-post render —
+intentional, cadence beats grade there. Everything else carries the full
+pipeline.
