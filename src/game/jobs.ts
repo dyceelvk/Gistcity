@@ -8,7 +8,7 @@ export interface JobDef { id: JobId; title: string; desc: string; pay: string; i
 export const JOBS: JobDef[] = [
   { id: 'dispatch', title: 'Dispatch rider', desc: 'Pick up a package at the Hub and deliver it across town before the timer runs out.', pay: '1,500 G', icon: '📦' },
   { id: 'market', title: 'Market runs', desc: 'Mama Bisi needs five crates gathered from the market before customers arrive.', pay: '2,000 G', icon: '🧺' },
-  { id: 'pos', title: 'POS agent', desc: 'Man the QuickCash stand and serve five customers — tap in the green zone.', pay: '2,000 G (serve 3+ of 5)', icon: '💳' },
+  { id: 'pos', title: 'POS agent', desc: 'Apply at the QuickCash stand, get approved, then serve real customers — they name the amount, you ask withdraw or transfer, keep the fee.', pay: 'Fees per customer (3%)', icon: '💳' },
 ];
 
 /** Glowing ring + floating icon used for zones and job targets. */
@@ -59,6 +59,7 @@ export class JobSystem {
   constructor(private world: World, private layer: THREE.Group, private cb: JobCallbacks) {}
 
   start(id: JobId, playerPos: THREE.Vector3) {
+    if (id === 'pos') { this.cb.toast('POS is not a tap game any more — apply at the QuickCash stand, then wait for customers.'); return; }
     if (this.active) this.cancel(true);
     const a: Active = { id, timeLeft: 0, target: null, marker: null, crates: [], collected: 0, busy: false };
     if (id === 'dispatch') {

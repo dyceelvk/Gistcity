@@ -78,6 +78,19 @@ export class Economy {
     } catch (e: any) { return { ok: false, error: 'network', message: errorText('network') }; }
   }
 
+  /**
+   * Credit an earned amount (POS service fee). Offline: straight into the wallet.
+   * Online: variable per-customer payouts need an RPC (docs/AUDIT.md §11) — the
+   * shift settles through the server pay table instead, so fees return 0 here.
+   */
+  async earnG(amount: number, _reason: string): Promise<SpendResult> {
+    if (!this.online) {
+      this.store.update((st) => { st.cash += amount; });
+      return { ok: true, paid: amount };
+    }
+    return { ok: true, paid: 0 };
+  }
+
   /** Voluntary gift to another citizen. */
   async gift(toUsername: string, amount: number, note: string): Promise<SpendResult> {
     amount = Math.floor(amount);

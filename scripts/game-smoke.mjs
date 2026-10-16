@@ -292,10 +292,11 @@ async function main() {
     const g = window.__gist;
     g.exitApartment();
     await new Promise((r) => setTimeout(r, 300));
+    const hadStarter = g.myVeh.length;
     const buy = await g.society.buyVehicle('toks-corolla', '#2c3e50', 58, -33, 0);
     if (!buy.ok) return { err: buy.message ?? 'buy failed' };
     await g.refreshVehicles();
-    const v = g.myVeh[0];
+    const v = g.myVeh.find((q) => q.id === buy.vehicle?.id) ?? g.myVeh[g.myVeh.length - 1];
     if (!v) return { err: 'vehicle not in garage' };
     g.enterVehicle(v.id);
     await new Promise((r) => setTimeout(r, 500));
@@ -319,13 +320,14 @@ async function main() {
     await simWait(0.3);
     const p = g.vehicles.parked.get(vId)?.view;
     return {
-      ...driving, moved, speed, stopped,
+      ...driving, moved, speed, stopped, hadStarter,
       after: g.act.current,
-      stillMine: g.myVeh.length === 1,
+      stillMine: g.myVeh.some((q) => q.id === v.id),
       parked: p ? { x: p.x, z: p.z } : null,
       movedFromBuy: p ? Math.hypot(p.x - 58, p.z + 33) : 0,
     };
   });
+  check('starter car granted on arrival (one test car)', car.hadStarter >= 1, `myVeh before buying=${car.hadStarter}`);
   check('buying a vehicle places it in the garage', !!car.stillMine && !car.err, car.err ?? `vehicles=${car.stillMine}`);
   check('entering a vehicle sets DRIVING', car.act === 'DRIVING' && !!car.driving, `act=${car.act}`);
   check('avatar is hidden while driving (sitting in the car)', car.avatarHidden === true, `hidden=${car.avatarHidden}`);
@@ -333,6 +335,89 @@ async function main() {
   check('car must stop before exit', car.stopped === true, `stopped=${car.stopped}`);
   check('parking persists the vehicle where it stopped', car.after === 'IDLE' && car.movedFromBuy > 1, JSON.stringify(car.parked));
   await shot('05-driving');
+
+  /* ------------------------------------- QuickCash POS (the real flow) + map */
+  const extra = await page.evaluate(async () => {
+    const g = window.__gist;
+    const out = {};
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+    // apply → pending
+    g.posApply();
+    out.applied = g.store.state.posApp?.status ?? null;
+    // approval (normally the stand answers after ~20 s)
+    g.store.update((s) => { s.posApp = { status: 'approved', at: Date.now() }; });
+    out.approved = g.store.state.posApp?.status ?? null;
+    // start a shift: the shop camera takes over and the player steps behind the counter
+    g.startPosShift();
+    await wait(500);
+    out.shiftActive = !!g.pos?.active;
+    out.shopCam = !!g.rig.fixed;
+    out.serveSpot = Math.hypot(g.avatar.root.position.x - (-20.9), g.avatar.root.position.z - (-10.1)) < 1.6;
+    const waitForChoice = async (ms) => {
+      const t0 = performance.now();
+      while (performance.now() - t0 < ms) {
+        if (document.querySelector('#dlgChoices .dlgChoice')) return true;
+        await new Promise((r) => setTimeout(r, 150));
+      }
+      return false;
+    };
+    // customer walks up and names their amount
+    out.gotAsk1 = await waitForChoice(22000);
+    const cash0 = g.store.state.cash;
+    if (out.gotAsk1) {
+      g.hud.onDialogueChoice(0); // "Ask: withdraw or transfer?"
+      await wait(300);
+      out.gotAsk2 = await waitForChoice(8000);
+      if (out.gotAsk2) {
+        g.hud.onDialogueChoice(0); // "Count cash & approve · take the fee"
+        await wait(1800); // terminal processing beat
+      }
+    }
+    out.served = g.pos ? g.pos.served : -1;
+    out.fee = g.store.state.cash - cash0;
+    out.methodLine = (document.querySelector('#dlgLine')?.textContent ?? '').includes('Thank');
+    g.endPosShift();
+    out.camReleased = !g.rig.fixed;
+    out.shiftEnded = !g.pos?.active;
+
+    // map: tap anywhere → point-to-go (no pin required)
+    g.hud.open('map');
+    await wait(150);
+    const cv = document.querySelector('#bigmap');
+    const r = cv.getBoundingClientRect();
+    const pins = g.hud.mapPins ?? [];
+    const s = cv.width / 170;
+    let tap = null;
+    outer: for (let fy = 0.1; fy <= 0.9; fy += 0.05) {
+      for (let fx = 0.1; fx <= 0.9; fx += 0.05) {
+        const px = (fx - 0.5) * cv.width, pz = (fy - 0.5) * cv.width;
+        let near = false;
+        for (const p of pins) {
+          const dx = p.x * s - px, dz = p.z * s - pz;
+          if (dx * dx + dz * dz < 42 * 42) { near = true; break; }
+        }
+        if (!near) { tap = { fx, fy }; break outer; }
+      }
+    }
+    if (tap) {
+      cv.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: r.left + r.width * tap.fx, clientY: r.top + r.height * tap.fy }));
+    }
+    const sheet = document.querySelector('#mapSheet');
+    out.mapFreeTap = !!tap && !sheet.classList.contains('hidden') && g.hud.mapSel?.id === 'free';
+    document.querySelector('#mapGo').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    out.waypoint = g.mapWaypoint ? { x: Math.round(g.mapWaypoint.x), z: Math.round(g.mapWaypoint.z) } : null;
+    g.clearWaypoint();
+    g.hud.closeAll();
+    return out;
+  });
+  check('POS application starts as pending (you do not own the POS)', extra.applied === 'pending', `status=${extra.applied}`);
+  check('approved POS agent can start a shift', extra.approved === 'approved' && extra.shiftActive, `approved=${extra.approved} active=${extra.shiftActive}`);
+  check('shop camera locks on and the player steps behind the counter', extra.shopCam && extra.serveSpot, `cam=${extra.shopCam} spot=${extra.serveSpot}`);
+  check('customer walks up: amount, then withdraw-or-transfer', extra.gotAsk1 && extra.gotAsk2, `ask1=${extra.gotAsk1} ask2=${extra.gotAsk2}`);
+  check('approving a transaction pays the service fee', extra.served === 1 && extra.fee > 0, `served=${extra.served} fee=${extra.fee}`);
+  check('shift ends and releases the shop camera', extra.shiftEnded && extra.camReleased, `ended=${extra.shiftEnded} cam=${extra.camReleased}`);
+  check('map tap-anywhere sets a point-to-go waypoint', extra.mapFreeTap && !!extra.waypoint, JSON.stringify(extra.waypoint));
 
   /* ------------------------------------------------- conversation */
   const talk = await page.evaluate(async () => {
@@ -665,7 +750,7 @@ async function main() {
     return { cash, hunger, savedCash: save.cash, vehicles: (soc.vehicles ?? []).length, certs: (soc.certificates ?? []).length };
   });
   check('state persists to the local save', persist.savedCash === persist.cash, `save.cash=${persist.savedCash} state.cash=${persist.cash}`);
-  check('vehicle persists in the society save', persist.vehicles === 1, `vehicles=${persist.vehicles}`);
+  check('vehicle persists in the society save', persist.vehicles >= 1, `vehicles=${persist.vehicles}`);
 
   await browser.close();
 

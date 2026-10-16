@@ -167,11 +167,13 @@ export function building(parent: THREE.Object3D, colliders: AABB[], landmarks: L
   }
   // roof
   if (style === 'bungalow' || style === 'duplex') {
-    const roof = new THREE.Mesh(new THREE.ConeGeometry(1, 1, 4), mat(style === 'bungalow' ? '#8a4b3a' : '#4d5a66', 0.85, 0.2));
+    // dark eaves line — separates wall from roof so the building reads from the far camera
+    box(g, fw + 1.4, 0.22, fd + 1.4, mat('#3a444c', 0.95), 0, h + 0.04, 0);
+    const roof = new THREE.Mesh(new THREE.ConeGeometry(1, 1, 4), mat(style === 'bungalow' ? '#8a4b3a' : '#46525c', 0.92, 0.05));
     roof.rotation.y = Math.PI / 4;
-    const rh = style === 'bungalow' ? 1.8 : 2.2;
+    const rh = style === 'bungalow' ? 2.6 : 3.4; // steeper: reads as a roof, not a slab, from above
     roof.scale.set((fw + 1.2) * 0.72, rh, (fd + 1.2) * 0.72);
-    roof.position.y = h + rh / 2 - 0.05; roof.castShadow = true;
+    roof.position.y = h + rh / 2 + 0.12; roof.castShadow = true;
     g.add(roof);
   } else {
     box(g, fw + 0.2, 0.3, fd + 0.2, mat('#5e5c56', 0.9), 0, h + 0.1, 0); // parapet slab
@@ -416,6 +418,47 @@ export function buildWorld(): World {
   keke(group, 5.1, -13, 0, colliders); keke(group, -24, 5.1, Math.PI / 2, colliders);
   palm(group, -8, -60, 1.2, colliders); palm(group, 8, 60, 1.3, colliders); palm(group, 60, -8, 1, colliders); palm(group, -60, 8, 1.1, colliders);
 
+  // ---- street life: power lines, bus canopy, mechanic corner, market spill --
+  {
+    const pole = (x: number, z: number) => {
+      cyl(group, 0.09, 0.12, 6.4, mat('#5b4632', 0.9), x, 3.2, z, 8);
+      box(group, 1.7, 0.09, 0.09, mat('#4a3826', 0.9), x, 5.9, z);
+      box(group, 1.3, 0.09, 0.09, mat('#4a3826', 0.9), x, 5.35, z);
+    };
+    const zs = [-70, -54, -38, -22, 22, 38, 54, 70];
+    for (const z of zs) { pole(-9.4, z); pole(9.4, z); }
+    for (const x of zs) { pole(x, -9.4); pole(x, 9.4); }
+    const cableM = mat('#1c1c22', 1);
+    for (const mid of [-62, -46, -30, 30, 46, 62]) {
+      for (const x of [-9.4, 9.4]) { const c = box(group, 0.05, 0.05, 16, cableM, x, 5.75, mid); c.castShadow = false; }
+      for (const z of [-9.4, 9.4]) { const c = box(group, 16, 0.05, 0.05, cableM, mid, 5.75, z); c.castShadow = false; }
+    }
+    // bus-stop canopy by the danfo park
+    box(group, 4.8, 0.16, 2.3, mat('#b03a2e', 0.85), 30, 2.6, 11.8);
+    for (const dx of [-2.1, 2.1]) cyl(group, 0.08, 0.08, 2.6, mat('#5c5c5c', 0.7, 0.3), 30 + dx, 1.3, 11.8, 8);
+    bench(group, 28.4, 11.8, Math.PI, colliders); bench(group, 31.6, 11.8, Math.PI, colliders);
+    // mechanic corner — tyres + umbrella near the east avenue
+    umbrella(group, 44, 12.6, '#8e44ad');
+    for (let i = 0; i < 5; i++) {
+      const t = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.16, 8, 16), mat('#20242a', 0.95));
+      t.rotation.x = Math.PI / 2; t.position.set(45.7, 0.12 + i * 0.3, 13.9); t.castShadow = true; group.add(t);
+    }
+    box(group, 1.7, 0.12, 1.05, mat('#caa06a', 0.95), 44, 0.86, 14.2);
+    // QuickCash queue corner: crates, a keke at the kerb, one more umbrella
+    umbrella(group, -22.8, -8.0, '#e74c3c');
+    keke(group, -17.2, -5.4, Math.PI, colliders);
+    for (let i = 0; i < 4; i++) box(group, 0.62, 0.5, 0.42, mat('#c9a06a', 0.95), -23.5 + (i % 2) * 0.72, 0.25 + Math.floor(i / 2) * 0.52, -10.6);
+    // market spill — extra tables + umbrellas along the market edge
+    for (let i = 0; i < 3; i++) {
+      const sx = -33 + i * 4.2, sz = -18.5;
+      umbrella(group, sx, sz, ['#e74c3c', '#f5c242', '#2ecc71'][i]);
+      box(group, 1.7, 0.12, 1.0, mat('#b9895c', 0.95), sx, 0.86, sz);
+      for (const dx of [-0.65, 0.65]) for (const dz of [-0.35, 0.35]) cyl(group, 0.05, 0.05, 0.86, mat('#7a5a38', 0.9), sx + dx, 0.43, sz + dz, 6);
+      box(group, 0.4, 0.22, 0.32, mat('#d35400', 0.9), sx - 0.3, 1.05, sz, false);
+      box(group, 0.34, 0.2, 0.3, mat('#27ae60', 0.9), sx + 0.35, 1.04, sz + 0.1, false);
+    }
+  }
+
   // ---- NPC walking loops (on sidewalks) --------------------------------------
   const V = (x: number, z: number) => new THREE.Vector3(x, 0, z);
   const paths: THREE.Vector3[][] = [
@@ -444,7 +487,7 @@ export function buildWorld(): World {
 
   const baked = bakeStatic(group);
   if (import.meta.env.DEV) console.info(`[gist] world baked: ${baked.removed} meshes → ${baked.meshes} draw calls`);
-  return { group, colliders, zones, landmarks, roads, paths, spawn: new THREE.Vector3(7.5, 0, 18), deliverySpots, animated, bounds };
+  return { group, colliders, zones, landmarks, roads, paths, spawn: new THREE.Vector3(7.5, 0, 9), deliverySpots, animated, bounds };
 }
 
 /** Gradient sky dome + a few drifting clouds. */
@@ -471,5 +514,33 @@ export function buildSky(scene: THREE.Scene, animated: World['animated']) {
     scene.add(g); clouds.push(g);
   }
   animated.push((dt) => { for (const c of clouds) { c.position.x += dt * 1.2; if (c.position.x > 240) c.position.x = -240; } });
+  // two circling flocks of birds — the sky is alive
+  const birdM = new THREE.MeshStandardMaterial({ color: '#23232c', roughness: 1 });
+  const flocks: THREE.Group[] = [];
+  for (let f = 0; f < 2; f++) {
+    const g = new THREE.Group();
+    for (let i = 0; i < 7; i++) {
+      const b = new THREE.Group();
+      const l = new THREE.Mesh(new THREE.BoxGeometry(1.15, 0.05, 0.16), birdM);
+      const r = l.clone();
+      l.position.x = -0.52; r.position.x = 0.52;
+      l.rotation.z = 0.55; r.rotation.z = -0.55;
+      b.add(l, r);
+      b.position.set(Math.cos(i * 1.7) * (3 + i), (i % 3) * 1.1, Math.sin(i * 1.7) * (3 + i));
+      g.add(b);
+    }
+    g.position.set(f ? 60 : -80, 62 + f * 14, f ? -40 : 55);
+    scene.add(g); flocks.push(g);
+  }
+  animated.push((dt, t) => {
+    for (let f = 0; f < flocks.length; f++) {
+      const g = flocks[f];
+      g.position.x += dt * 3.4 * (f ? 1 : -1);
+      if (g.position.x > 170) g.position.x = -170;
+      if (g.position.x < -170) g.position.x = 170;
+      g.rotation.y = Math.sin(t * 0.08 + f) * 0.5;
+      for (const b of g.children) b.rotation.z = Math.sin(t * 6.5 + b.position.x * 2) * 0.32;
+    }
+  });
   return sky;
 }

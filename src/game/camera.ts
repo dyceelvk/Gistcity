@@ -5,12 +5,14 @@ import { pointInside } from './physics';
 
 export class CameraRig {
   yaw = 0;             // forward() = -Z at start, i.e. looking up the avenue to the roundabout
-  pitch = 0.32;
-  dist = 6.5;
-  minDist = 2.5; maxDist = 12;
+  pitch = 0.78;
+  dist = 15;
+  minDist = 4.5; maxDist = 26;
   private pos = new THREE.Vector3();
   private look = new THREE.Vector3();
-  private curDist = 6.5;
+  private curDist = 15;
+  /** Locked cinematic camera (POS shop cam, interiors). Glides into place. */
+  fixed: { pos: THREE.Vector3; look: THREE.Vector3 } | null = null;
   /** When set, the camera glides to a front-facing portrait view (Style Studio). */
   portrait = false;
 
@@ -27,9 +29,18 @@ export class CameraRig {
   right() { return new THREE.Vector3(Math.cos(this.yaw), 0, -Math.sin(this.yaw)); }
 
   update(dt: number, target: THREE.Vector3, targetYaw: number, colliders: AABB[], indoor: boolean) {
-    const focus = target.clone().add(new THREE.Vector3(0, 1.45, 0));
+    if (this.fixed) {
+      // shop camera: glide to the fixed vantage and stare at the action
+      const k = Math.min(1, dt * 3.2);
+      this.pos.lerp(this.fixed.pos, k);
+      this.look.lerp(this.fixed.look, k);
+      this.camera.position.copy(this.pos);
+      this.camera.lookAt(this.look);
+      return;
+    }
+    const focus = target.clone().add(new THREE.Vector3(0, 1.35, 0));
     let yaw = this.yaw, pitch = this.pitch, dist = this.dist;
-    if (!this.portrait && innerHeight > innerWidth) { focus.y += 0.65; dist = Math.min(dist + 1.2, this.maxDist); } // phone: frame like a mobile game
+    if (!this.portrait && innerHeight > innerWidth) { focus.y += 1.1; dist = Math.min(dist * 1.05, this.maxDist); } // phone: show the whole street
     if (this.portrait) {
       // in front of the player, slightly above eye line
       // camera sits where the avatar is looking, so we see the face
@@ -54,6 +65,12 @@ export class CameraRig {
     this.curDist = THREE.MathUtils.lerp(this.curDist, d, Math.min(1, dt * (d < this.curDist ? 18 : 4)));
     const desired = focus.clone().addScaledVector(dir, this.curDist);
     if (desired.y < 0.5) desired.y = 0.5;
+    // rooftops: when the lens lands over a building, fly just above its roof
+    for (const c of colliders) {
+      if (desired.x > c.minX - 0.6 && desired.x < c.maxX + 0.6 && desired.z > c.minZ - 0.6 && desired.z < c.maxZ + 0.6 && desired.y < c.h + 0.5) {
+        desired.y = c.h + 1.1;
+      }
+    }
     const k = this.portrait ? Math.min(1, dt * 6) : 1;
     this.pos.lerp(desired, k);
     this.look.lerp(focus, k);

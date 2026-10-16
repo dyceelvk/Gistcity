@@ -63,6 +63,8 @@ export interface Society {
   /** Every citizen's parked vehicle (for the streets). */
   parkedVehicles(): Promise<VehicleView[]>;
   buyVehicle(model: string, color: string, x: number, z: number, yaw: number): Promise<BuyVehicleResult>;
+  /** Free starter car (test drive). Idempotent: one per citizen. */
+  grantStarterVehicle(x: number, z: number, yaw: number): Promise<BuyVehicleResult>;
   parkVehicle(id: string, x: number, z: number, yaw: number, area: string): Promise<void>;
   shareVehicle(id: string, username: string, grant: boolean): Promise<Result>;
   govStatus(): Promise<GovStatus>;
@@ -126,6 +128,10 @@ export class CloudSociety implements Society {
   async parkedVehicles() { const { data } = await cloud.client!.from('vehicles_public').select('*').limit(300); return ((data ?? []) as any[]).map((v) => ({ ...v, name: v.model_id, kind: v.model_id.startsWith('keke') ? 'keke' : v.model_id.startsWith('danfo') ? 'bus' : 'car', condition: 100, top_speed: 12, mine: v.owner_id === cloud.user?.id, keys: [] })) as VehicleView[]; }
   buyVehicle(model: string, color: string, x: number, z: number, yaw: number) { return this.call<BuyVehicleResult>('buy_vehicle', { p_model: model, p_color: color, p_x: x, p_z: z, p_yaw: yaw, p_key: uuid() }); }
   async parkVehicle(id: string, x: number, z: number, yaw: number, area: string) { try { await cloud.rpc('park_vehicle', { p_vehicle: id, p_x: x, p_z: z, p_yaw: yaw, p_area: area }); } catch { /* best effort */ } }
+  async grantStarterVehicle(_x: number, _z: number, _yaw: number): Promise<BuyVehicleResult> {
+    // Server-side gifting needs an RPC (docs/AUDIT.md §11). Practice mode gets the free car.
+    return { ok: false, error: 'GC_PRACTICE_ONLY', message: 'The starter car is handed over in practice mode for now.' };
+  }
   shareVehicle(id: string, username: string, grant: boolean) { return this.call<Result>('vehicle_share', { p_vehicle: id, p_username: username, p_grant: grant }); }
   govStatus() { return cloud.rpc<GovStatus>('gov_my_status', {}); }
   govApply(position: string) { return this.call<Result & { course?: string }>('gov_apply', { p_position: position }); }
@@ -284,6 +290,15 @@ export class LocalSociety implements Society {
     this.d.stock[m.id] = (this.d.stock[m.id] ?? 0) + 1;
     const L = 'ABCDEFGHJKLMNPRSTUVWXYZ';
     const v: VehicleView = { id: uuid(), model_id: m.id, name: m.name, kind: m.kind, color: m.colors.includes(color) ? color : m.colors[0], plate: `GC-${L[Math.floor(Math.random() * L.length)]}${L[Math.floor(Math.random() * L.length)]}${L[Math.floor(Math.random() * L.length)]}-${String(Math.floor(Math.random() * 1000)).padStart(3, '0')}`, condition: 100, x, z, yaw, area: 'city', top_speed: m.top_speed, owner_id: 'local', mine: true, keys: [] };
+    this.d.vehicles.push(v); this.save();
+    return { ok: true, vehicle: v };
+  }
+  async grantStarterVehicle(x: number, z: number, yaw: number): Promise<BuyVehicleResult> {
+    const own = this.d.vehicles[0];
+    if (own) return { ok: true, vehicle: own };
+    const m = VEHICLE_MODELS.find((v) => v.id === 'toks-corolla') ?? VEHICLE_MODELS[0]!;
+    const L = 'ABCDEFGHJKLMNPRSTUVWXYZ';
+    const v: VehicleView = { id: uuid(), model_id: m.id, name: m.name, kind: m.kind, color: m.colors[0] ?? '#fff', plate: `GC-${L[Math.floor(Math.random() * L.length)]}${L[Math.floor(Math.random() * L.length)]}${L[Math.floor(Math.random() * L.length)]}-007`, condition: 100, x, z, yaw, area: 'city', top_speed: m.top_speed, owner_id: 'local', mine: true, keys: [] };
     this.d.vehicles.push(v); this.save();
     return { ok: true, vehicle: v };
   }

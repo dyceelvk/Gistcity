@@ -362,3 +362,47 @@ system (user feedback: "UI should look expensive and cool… you can't tap map")
 **Tests** — `node scripts/game-smoke.mjs` **72/72** (two new checks: map pin tap opens
 the place sheet; SET WAYPOINT lands on `jobTarget()`); `node scripts/db-tests.mjs` all
 steps pass; `npm run build` clean (fonts bundled).
+
+---
+
+## 14. Review revision — far camera, POS realism, city life (2026-10-16)
+
+Delivered against the review notes (lag, camera distance, map navigation, test car,
+POS realism, walking, empty city, graphics):
+
+1. **Performance** — shadow map refreshed every 10th frame (`shadowMap.autoUpdate=false`),
+   `antialias` off on touch, pixel ratio capped 1.25 (touch) / 1.6 (desktop).
+2. **Far camera** — default `dist 15 / pitch 0.78` (~12 m altitude, characters tiny and
+   the whole street visible), presets Near/Far/City (11/0.52, 15/0.78, 22/0.62), rooftops
+   auto-lift the lens above building footprints (camera.ts), spawn moved clear of the
+   Gist Heights duplex roof that used to slice the frame (the "grey wedge").
+3. **Tap-anywhere map** — clicking any empty point on the big map opens "Point on the
+   map" with distance and SET WAYPOINT; free-tap target drawn on the map (hud.ts).
+4. **Test car** — `Society.grantStarterVehicle()` hands every citizen one free
+   toks-corolla by the roundabout on arrival (idempotent; practice mode — online needs
+   an RPC, §11).
+5. **POS rebuilt as the real Nigerian flow** (`src/game/pos.ts`): apply at the QuickCash
+   stand → application pending → approved (~20 s) → start shift behind the counter under
+   a fixed **shop camera** (CCTV vantage, `CameraRig.fixed`) → one customer at a time
+   walks up, names their amount → you ask "Withdraw or transfer?" → count cash & approve
+   on the terminal → 3% fee credited per transaction (`Economy.earnG`) → shift report.
+   The old green-zone tap minigame is gone (`JobSystem.start('pos')` redirects to the
+   application). Dialogue is promise-based (`Game.askDialogue`) and always hands the
+   HUD choice hooks back.
+6. **Walking** — `Avatar.animate(dt, speedClass, mps)` now scales stride by ground speed
+   (same pattern as `Human`), so feet stop skating; remotes pass real mps.
+7. **City life** — pedestrians 18/24 (touch/desktop) with wider LOD, traffic 8/12,
+   power lines + poles along both avenues, bus-stop canopy by the danfo park, mechanic
+   corner, QuickCash queue corner, market spill tables, circling bird flocks, sun disc
+   + glow driven by the day cycle, steeper roof profiles with eaves lines so buildings
+   read as buildings from the far camera.
+
+**Oracles (this cut):** game-smoke **80/80** (incl. new starter-car, POS apply→serve→fee,
+shop-camera, and map tap-anywhere checks), `scripts/db-tests.mjs` all steps, `tsc` clean,
+`npm run build` + `check-bundle-secrets.mjs` clean.
+
+**Remaining defects / follow-ups:** per-customer POS fees are client-settled offline
+(online needs the `pos_fee` RPC, §11); UI colouring overhaul from the review is only
+partially addressed (perf/camera/city prioritised); graphics remain stylised low-poly
+beyond the city-life pass; an interior/furniture pass and deeper NPC schedules remain open.
+

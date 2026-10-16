@@ -323,12 +323,17 @@ export class Avatar {
     blob.rotation.x = -Math.PI / 2; blob.position.y = 0.012; this.root.add(blob);
   }
 
-  /** @param speed 0 = idle, 1 = walking, 2 = running. */
-  animate(dt: number, speed: number) {
+  /** @param speed 0 = idle, 1 = walking, 2 = running. @param mps ground speed scales the stride so the feet don't skate. */
+  animate(dt: number, speed: number, mps?: number) {
     const bn = this.bones, b = (n: BoneName) => bn[B[n]];
     this.idleT += dt;
     const moving = speed > 0.05, run = speed > 1.5;
-    if (moving) this.phase += dt * (run ? 11.5 : 7.5);
+    if (moving) {
+      const groundMps = mps && mps > 0.2 ? mps : (run ? 6.2 : 3.1);
+      const stride = run ? 2.15 : 1.45; // metres per full leg cycle
+      const cyclesPerSec = THREE.MathUtils.clamp(groundMps / stride, 1.05, 2.9);
+      this.phase += dt * cyclesPerSec * Math.PI * 2;
+    }
     const ph = this.phase, s = Math.sin(ph), c = Math.cos(ph), t = this.idleT;
     const k = Math.min(1, dt * 12);
     const L = THREE.MathUtils.lerp;

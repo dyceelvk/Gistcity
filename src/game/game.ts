@@ -35,6 +35,7 @@ import { FamilyUI } from '../ui/family-ui';
 import { makeOpportunity, type Opportunity } from '../net/opportunity';
 import { OpportunityUI } from '../ui/opportunity-ui';
 import { scanFace, applyScan } from './facescan';
+import { PosShift, type PosHooks } from './pos';
 
 const WALK = 3.3, RUN = 6.4, RADIUS = 0.38;
 
@@ -136,6 +137,16 @@ export class Game implements HudHost, SocietyHost {
   /** Total simulated seconds (clamped dt) — debugging & tests; unlike Clock.elapsedTime it survives slow frames. */
   simSeconds = 0;
 
+  private sunDisc: THREE.Sprite;
+  private shadowsTick = 0;
+  /** QuickCash POS — apply → approved → shift behind the counter under the shop camera. */
+  private pos: PosShift | null = null;
+  private posApprovalAt = 0;
+  private readonly POS_COUNTER = new THREE.Vector3(-19.6, 0, -9.2);
+  private readonly POS_SERVE = new THREE.Vector3(-20.9, 0, -10.1);
+  private readonly POS_STREET = new THREE.Vector3(-19.4, 0, -6.2);
+  private readonly POS_CAM = { pos: new THREE.Vector3(-21.9, 3.7, -13.9), look: new THREE.Vector3(-19.4, 1.15, -8.0) };
+
   constructor(host: HTMLElement, boot: Boot) {
     this.store = new Store(boot.state);
     this.economy = new Economy(this.store);
@@ -143,11 +154,27 @@ export class Game implements HudHost, SocietyHost {
     this.store.state.needs = needs.catchUp(this.store.state.needs);
 
     const touch = matchMedia('(pointer: coarse)').matches;
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-    this.renderer.setPixelRatio(Math.min(devicePixelRatio, touch ? 1.5 : 1.75));
+    this.renderer = new THREE.WebGLRenderer({ antialias: !('ontouchstart' in window), powerPreference: 'high-performance' });
+    this.renderer.setPixelRatio(Math.min(devicePixelRatio, touch ? 1.25 : 1.6));
     this.renderer.setSize(innerWidth, innerHeight);
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.shadowMap.autoUpdate = false; // sun moves slowly — refresh the map on a tick, not every frame
+
+    // sun disc + glow in the sky
+    const sunTex = (() => {
+      const c = document.createElement('canvas'); c.width = c.height = 128;
+      const g = c.getContext('2d')!;
+      const grd = g.createRadialGradient(64, 64, 6, 64, 64, 64);
+      grd.addColorStop(0, 'rgba(255,246,220,1)');
+      grd.addColorStop(0.32, 'rgba(255,212,140,0.55)');
+      grd.addColorStop(1, 'rgba(255,186,110,0)');
+      g.fillStyle = grd; g.fillRect(0, 0, 128, 128);
+      return new THREE.CanvasTexture(c);
+    })();
+    this.sunDisc = new THREE.Sprite(new THREE.SpriteMaterial({ map: sunTex, transparent: true, depthWrite: false, opacity: 1 }));
+    this.sunDisc.scale.setScalar(130);
+    this.scene.add(this.sunDisc);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.05;
@@ -187,7 +214,7 @@ export class Game implements HudHost, SocietyHost {
     }
     // vehicles + traffic + shared day/night
     this.vehicles = new VehicleManager(); this.scene.add(this.vehicles.group);
-    this.traffic = new TrafficManager(trafficLoops(), touch ? 5 : 7); this.scene.add(this.traffic.group);
+    this.traffic = new TrafficManager(trafficLoops(), touch ? 8 : 12); this.scene.add(this.traffic.group);
     const sky = this.scene.children.find((o) => o.userData.uniforms);
     this.day = new DayCycle(this.sun, this.hemi, sky ? (sky.userData.uniforms as any) : null, this.scene);
 
@@ -198,7 +225,7 @@ export class Game implements HudHost, SocietyHost {
     this.scene.add(this.avatar.root);
     this.rig.snapTo(this.avatar.root.position);
 
-    this.npcs = new NpcManager(this.world.paths, touch ? 12 : 16); this.npcs.lodDist = touch ? 42 : 60;
+    this.npcs = new NpcManager(this.world.paths, touch ? 18 : 24); this.npcs.lodDist = touch ? 55 : 75;
     this.scene.add(this.npcs.group);
 
     // input + hud
@@ -295,6 +322,7 @@ export class Game implements HudHost, SocietyHost {
     this.hud.loaded();
     this.hud.needs(this.store.state.needs);
     void this.refreshVehicles();
+    void this.grantStarterCar();
     if (boot.employment) this.hud.toast(`Welcome back, ${boot.employment.title} ${boot.employment.employee_no}. Shifts are at the Secretariat.`, 4000);
 
     if (boot.needsCharacter || (!cloud.enabled && !localStorage.getItem('gist_onboarded'))) {
@@ -322,7 +350,11 @@ export class Game implements HudHost, SocietyHost {
   clearWaypoint() { this.mapWaypoint = null; }
   jobTarget() { return this.indoor ? null : (this.jobs.target() ?? this.mapWaypoint); }
   activeJob(): JobId | null { return this.jobs.active?.id ?? null; }
-  startJob(id: JobId) { if (this.indoor || this.seated || this.sleeping) return; this.jobs.start(id, this.avatar.root.position); }
+  startJob(id: JobId) {
+    if (this.indoor || this.seated || this.sleeping) return;
+    if (id === 'pos') { this.hud.toast('POS is an application now — walk up to the QuickCash stand in the market quarter and apply.'); return; }
+    this.jobs.start(id, this.avatar.root.position);
+  }
   cancelJob() { this.jobs.cancel(); }
   isIndoor() { return this.indoor; }
   isCreating() { return this.creating; }
@@ -334,7 +366,7 @@ export class Game implements HudHost, SocietyHost {
     this.hud.toast(`Welcome to GistCity, ${this.store.state.name}! Walk up to anything glowing to interact ✦`, 4500);
   }
   refreshFurniture() { this.interior.setFurniture(this.store.state.apartment); }
-  cycleCamera() { this.camPreset = (this.camPreset + 1) % 3; this.rig.dist = [4.5, 6.5, 9.5][this.camPreset]; this.hud.toast(['Close camera', 'Standard camera', 'Wide camera'][this.camPreset]); }
+  cycleCamera() { this.camPreset = (this.camPreset + 1) % 3; this.rig.dist = [11, 15, 22][this.camPreset]; this.rig.pitch = [0.52, 0.78, 0.62][this.camPreset]; this.hud.toast(['Near view', 'Far view', 'City view'][this.camPreset]); }
   resetSave() {
     if (cloud.signedIn) { this.hud.toast('Online progress is kept on the server; only the look was reset.'); this.store.update((s) => { s.appearance = defaultState().appearance; }); this.applyAppearance(); return; }
     localStorage.removeItem('gist_save_v1');
@@ -562,7 +594,18 @@ export class Game implements HudHost, SocietyHost {
       case 'suya': this.visit('suya'); return CONSUMABLES.filter((c) => c.vendor === 'suya').map(order);
       case 'buka': this.visit('buka'); return CONSUMABLES.filter((c) => c.vendor === 'buka').map(order);
       case 'lounge': this.visit('lounge'); return CONSUMABLES.filter((c) => c.vendor === 'lounge').map(order);
-      case 'pos': return this.jobs.active?.id === 'pos' ? [] : [{ icon: '💳', label: 'Work the POS stand', run: () => this.jobs.start('pos', pos) }];
+      case 'pos': {
+        if (this.pos?.active) return [
+          { icon: '🚪', label: 'End the shift', run: () => this.endPosShift() },
+        ];
+        const app = this.store.state.posApp;
+        if (!app) return [{ icon: '📝', label: 'Apply to become a POS agent', run: () => this.posApply() }];
+        if (app.status === 'pending') return [{ icon: '⏳', label: 'Application under review…', disabled: 'QuickCash is reviewing your application — check back shortly.', run: () => {} }];
+        return [
+          { icon: '🏪', label: 'Start POS shift (customers will come)', run: () => this.startPosShift() },
+          { icon: '✅', label: 'POS agent · approved', disabled: 'Your application is approved — you can run shifts.', run: () => {} },
+        ];
+      }
       case 'pitch': return [{ icon: '⚽', label: 'Penalty shootout', run: () => this.playPitch() }];
       case 'seat': {
         const free = this.freeSeat(z); if (!free) return [{ icon: '🪑', label: `${z.label} full`, disabled: 'All seats taken', run: () => {} }];
@@ -645,6 +688,100 @@ export class Game implements HudHost, SocietyHost {
   /* ------------------------------------------------------ conversations */
 
   /** Talk to an NPC: a real conversation where every prompt has a response. */
+  /** One free test car per citizen so everyone can check the city out (practice mode). */
+  private async grantStarterCar() {
+    try {
+      const mine = await this.society.myVehicles();
+      if (mine.length === 0) {
+        const r = await this.society.grantStarterVehicle(12, 14, Math.PI);
+        if (r.ok && r.vehicle) {
+          await this.refreshVehicles();
+          this.hud.toast('🚗 A test car is parked by the roundabout — walk up and press Drive.', 5200);
+        }
+      }
+    } catch { /* society not ready */ }
+  }
+
+  /* ---------------- QuickCash POS: apply → approved → real customers ---------------- */
+
+  posApply() {
+    const s = this.store.state;
+    if (s.posApp) return;
+    this.store.update((st) => { st.posApp = { status: 'pending', at: Date.now() }; });
+    this.posApprovalAt = Date.now() + 20_000;
+    this.hud.toast('📝 Application submitted to QuickCash — wait at the stand for the verdict.', 4200);
+    this.hud.objective('POS application in review', 'QuickCash reviews applications in a few moments. Stay close to the stand.', false, '💳');
+    this.refreshActions();
+  }
+
+  startPosShift() {
+    if (this.pos?.active || this.indoor || this.areaId !== 'city') return;
+    const pos = this.avatar.root.position;
+    pos.set(this.POS_SERVE.x, 0, this.POS_SERVE.z);
+    this.yaw = Math.atan2(this.POS_COUNTER.x - pos.x, this.POS_COUNTER.z - pos.z);
+    // shop camera — CCTV over the counter, watching the transaction
+    this.rig.fixed = { pos: this.POS_CAM.pos.clone(), look: this.POS_CAM.look.clone() };
+    this.activityLabel = 'POS shift';
+    this.pushActivityChip();
+    this.hud.objective('POS shift behind the counter', 'Customers name their amount — ask “withdraw or transfer?”, approve on the terminal, keep the 3% fee.', false, '🏪');
+    const hooks: PosHooks = {
+      ask: (name, role, line, choices) => this.askDialogue(name, role, line, choices),
+      say: (name, role, line) => this.hud.showDialogue(name, role, line, []),
+      toast: (m) => this.hud.toast(m),
+      chip: (t) => { this.activityLabel = t ?? 'POS shift'; this.pushActivityChip(); },
+      earn: (amount) => { void this.economy.earnG(amount, 'pos-fee'); },
+      onEnd: (served, earned) => this.posShiftReport(served, earned),
+    };
+    this.pos = new PosShift(this.scene, hooks);
+    this.pos.begin(this.POS_COUNTER.clone(), this.POS_STREET.clone());
+    this.refreshActions();
+  }
+
+  endPosShift(reason?: string) {
+    if (!this.pos?.active) return;
+    this.pos.end();
+    this.rig.fixed = null;
+    this.activityLabel = 'in GistCity';
+    this.pushActivityChip();
+    this.hud.closeDialogue(false);
+    this.hud.onDialogueChoice = (i) => this.pickDialogue(i);
+    if (reason) this.hud.toast(reason, 3600);
+    this.defaultObjective();
+    this.refreshActions();
+  }
+
+  private posShiftReport(served: number, earned: number) {
+    this.rig.fixed = null;
+    this.activityLabel = 'in GistCity';
+    this.pushActivityChip();
+    this.store.update((s) => { s.stats.xp += 30 + served * 8; s.stats.hustle += 1; s.jobsDone++; });
+    const st = this.store.state;
+    if (st.jobsDone >= 1) this.award('first-hustle');
+    if (st.jobsDone >= 5) this.award('five-hustles');
+    if (st.cash >= 50000) this.award('big-boy');
+    this.hud.toast(`POS shift complete — ${served} customers served, ${fmtG(earned)} in fees 💚`, 4800);
+    this.defaultObjective();
+    this.refreshActions();
+  }
+
+  /** Dialogue card as a promise: resolves with the chosen option index (or -1 when closed). */
+  private askDialogue(name: string, role: string, line: string, choices: string[]): Promise<number> {
+    return new Promise((resolve) => {
+      const prevChoice = this.hud.onDialogueChoice;
+      const prevClose = this.hud.onDialogueClose;
+      let done = false;
+      const finish = (i: number) => {
+        if (done) return; done = true;
+        this.hud.onDialogueChoice = prevChoice;
+        this.hud.onDialogueClose = prevClose;
+        resolve(i);
+      };
+      this.hud.showDialogue(name, role, line, choices.map((label, i) => ({ icon: i === 0 ? '✅' : '✖️', label })));
+      this.hud.onDialogueChoice = (i) => finish(i);
+      this.hud.onDialogueClose = () => { prevClose?.(); finish(-1); };
+    });
+  }
+
   private startNpcTalk(npc: Npc) {
     if (this.talking) return;
     this.hud.closeAll();
@@ -1099,7 +1236,7 @@ export class Game implements HudHost, SocietyHost {
       let diff = st.yaw - r.avatar.root.rotation.y; while (diff > Math.PI) diff -= Math.PI * 2; while (diff < -Math.PI) diff += Math.PI * 2;
       r.avatar.root.rotation.y += diff * Math.min(1, dt * 10);
       r.avatar.setPose?.(st.pose === 'sit' ? 'sit' : 'none');
-      r.avatar.animate(dt, d > 0.15 && st.pose === 'none' ? st.speed || 1 : 0);
+      r.avatar.animate(dt, d > 0.15 && st.pose === 'none' ? st.speed || 1 : 0, d / Math.max(dt, 0.016));
       if (r.bubble && r.bubbleUntil && now > r.bubbleUntil) { r.avatar.root.remove(r.bubble); r.bubble = undefined; }
       if (st.vehicle && st.area === 'city' && this.areaId === 'city') cars.push({ id: st.id, model: st.vehicle.model, color: st.vehicle.color, x: r.avatar.root.position.x, z: r.avatar.root.position.z, yaw: r.avatar.root.rotation.y });
     }
@@ -1256,6 +1393,18 @@ export class Game implements HudHost, SocietyHost {
     } else if (scene?.animated) for (const fn of scene.animated) fn(dt, t);
     for (const m of this.markers.children) if (m.visible) animateMarker(m as THREE.Group, t, m.userData.phase);
 
+    // QuickCash POS shift + application verdict
+    if (this.pos?.active) {
+      this.pos.update(dt);
+      const pv = this.avatar.root.position;
+      if (Math.hypot(pv.x - this.POS_SERVE.x, pv.z - this.POS_SERVE.z) > 8) this.endPosShift('You left the counter — the shift ended.');
+    } else if (this.posApprovalAt && Date.now() >= this.posApprovalAt) {
+      this.posApprovalAt = 0;
+      this.store.update((st) => { if (st.posApp) st.posApp = { status: 'approved', at: Date.now() }; });
+      this.hud.toast('✅ QuickCash approved your POS application! Start a shift at the stand.', 5200);
+      if (this.currentZone?.id === 'pos') this.refreshActions();
+    }
+
     // remote players
     this.updateRemotes(dt);
     if (cloud.signedIn) cloud.broadcastPos(pos.x, pos.z, this.yaw, speed < 0.1 ? 0 : speed > (WALK + RUN) / 2 ? 2 : 1, this.indoor, this.pose, this.areaId, null, this.activityString());
@@ -1265,6 +1414,13 @@ export class Game implements HudHost, SocietyHost {
     const so = this.day.sunOffset();
     this.sun.position.set(pos.x + so.x, so.y, pos.z + so.z);
     this.sun.target.position.copy(pos); this.sun.target.updateMatrixWorld();
+    // so already carries the light's distance scale — normalize onto the sky dome
+    const sd = so.clone().normalize().multiplyScalar(330);
+    this.sunDisc.position.set(pos.x + sd.x, Math.max(24, sd.y), pos.z + sd.z);
+    const dm = this.sunDisc.material as THREE.SpriteMaterial;
+    dm.opacity = THREE.MathUtils.clamp(this.sun.intensity / 1.5, 0, 1);
+    dm.color.copy(this.sun.color).lerp(new THREE.Color('#ffffff'), 0.25);
+    if ((this.shadowsTick = (this.shadowsTick + 1) % 10) === 0) this.renderer.shadowMap.needsUpdate = true;
 
     // camera
     this.rig.update(dt, pos, this.yaw, colliders, this.indoor);

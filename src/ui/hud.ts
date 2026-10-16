@@ -616,13 +616,22 @@ export class Hud {
         const dx = p.x * s - px, dz = p.z * s - pz, d = dx * dx + dz * dz;
         if (d < bd) { bd = d; best = p; }
       }
-      this.mapSel = best;
       const sheet = $('#mapSheet');
       if (best) {
+        this.mapSel = best;
         sheet.classList.remove('hidden');
         $('#mapSheetName').textContent = best.label;
         $('#mapSheetText').textContent = `Set a waypoint and the gold marker will guide you across the city.`;
-      } else sheet.classList.add('hidden');
+      } else {
+        // free tap — the whole map is point-to-go, no pin required
+        const free = { x: px / s, z: pz / s, label: 'Map point', id: 'free' };
+        this.mapSel = free;
+        const p = this.host.player();
+        const d = Math.round(Math.hypot(free.x - p.x, free.z - p.z));
+        sheet.classList.remove('hidden');
+        $('#mapSheetName').textContent = 'Point on the map';
+        $('#mapSheetText').textContent = `${d} m away · set a waypoint and walk or drive there.`;
+      }
       this.drawBigMap();
     });
     $('#mapGo').addEventListener('click', () => {
@@ -660,6 +669,15 @@ export class Hud {
     }
     g.translate(w / 2 - p.x * s, h / 2 - p.z * s);
     this.paintCity(g, s, false);
+    if (this.mapSel && this.mapSel.id === 'free') {
+      const x = this.mapSel.x * s, y = this.mapSel.z * s;
+      g.strokeStyle = '#c2ff4e'; g.lineWidth = 3; g.shadowColor = '#c2ff4e'; g.shadowBlur = 14;
+      g.beginPath(); g.arc(x, y, 10, 0, Math.PI * 2); g.stroke();
+      g.beginPath(); g.moveTo(x - 16, y); g.lineTo(x + 16, y); g.moveTo(x, y - 16); g.lineTo(x, y + 16); g.stroke();
+      g.shadowBlur = 0;
+      g.fillStyle = '#f3f6f1'; g.font = 'bold 13px sans-serif'; g.textAlign = 'center';
+      g.fillText('You go here', x, y - 22); g.textAlign = 'left';
+    }
     const tgt = this.host.jobTarget();
     if (tgt) {
       g.fillStyle = '#ecc873'; g.shadowColor = '#ecc873'; g.shadowBlur = 8;
@@ -696,6 +714,15 @@ export class Hud {
         g.fillStyle = '#f3f6f1'; g.font = 'bold 13px sans-serif'; g.textAlign = 'center';
         g.fillText(pin.label, x, y - 20); g.textAlign = 'left';
       }
+    }
+    if (this.mapSel && this.mapSel.id === 'free') {
+      const x = this.mapSel.x * s, y = this.mapSel.z * s;
+      g.strokeStyle = '#c2ff4e'; g.lineWidth = 3; g.shadowColor = '#c2ff4e'; g.shadowBlur = 14;
+      g.beginPath(); g.arc(x, y, 10, 0, Math.PI * 2); g.stroke();
+      g.beginPath(); g.moveTo(x - 16, y); g.lineTo(x + 16, y); g.moveTo(x, y - 16); g.lineTo(x, y + 16); g.stroke();
+      g.shadowBlur = 0;
+      g.fillStyle = '#f3f6f1'; g.font = 'bold 13px sans-serif'; g.textAlign = 'center';
+      g.fillText('You go here', x, y - 22); g.textAlign = 'left';
     }
     const tgt = this.host.jobTarget();
     if (tgt) {

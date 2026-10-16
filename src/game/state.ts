@@ -12,7 +12,11 @@ export interface Stats {
   xp: number;
 }
 
+export interface PosApplication { status: 'pending' | 'approved'; at: number }
+
 export interface PlayerState {
+  /** QuickCash POS application (you apply first — you never own the POS). */
+  posApp: PosApplication | null;
   name: string;
   /** Unique account handle (set by the server at registration; empty in offline practice). */
   username: string;
@@ -56,7 +60,9 @@ export const START_G = 10000;
 export const fmtG = (n: number) => Math.round(n).toLocaleString('en-NG') + ' G';
 
 export function defaultState(): PlayerState {
+  const posApp = null;
   return {
+    posApp,
     name: 'New GistCitizen',
     username: '',
     appearance: { ...DEFAULT_APPEARANCE },
@@ -79,6 +85,8 @@ export function sanitizeState(raw: unknown): PlayerState {
   const strs = (v: unknown) => (Array.isArray(v) ? v.filter((x) => typeof x === 'string').slice(0, 200) : []);
   const s = r.stats && typeof r.stats === 'object' ? r.stats : {};
   return {
+    posApp: r.posApp && typeof r.posApp === 'object' && (r.posApp.status === 'pending' || r.posApp.status === 'approved')
+      ? { status: r.posApp.status, at: num(r.posApp.at, Date.now()) } : null,
     name: typeof r.name === 'string' && r.name.trim() ? r.name.trim().slice(0, 24) : d.name,
     username: typeof r.username === 'string' ? r.username.slice(0, 20) : '',
     appearance: sanitizeAppearance(r.appearance),
