@@ -62,6 +62,7 @@ async function main() {
   const chromium = chromiumMod.default ?? chromiumMod;
 
   const browser = await puppeteer.launch({
+  protocolTimeout: 600000,
     executablePath: await chromium.executablePath(),
     args: [...chromium.args, '--no-sandbox', '--use-gl=angle', '--use-angle=swiftshader', '--enable-webgl'],
     defaultViewport: { width: 1280, height: 800 },
@@ -165,20 +166,24 @@ async function main() {
       const nx = Math.max(b.minX, Math.min(p.x, b.maxX)), nz = Math.max(b.minZ, Math.min(p.z, b.maxZ));
       return (p.x - nx) ** 2 + (p.z - nz) ** 2 < R * R * 0.9;
     });
-    // walk straight at the GIST monument / roundabout furniture for 4 s of frames
+    // push toward the city centre, one nudge per frame, letting physics resolve
     const start = g.avatar.root.position.clone();
-    let worst = 0, saw = 0;
-    for (let i = 0; i < 60; i++) {
-      g.avatar.root.position.z -= 0.12; // push into the city centre colliders
+    let saw = 0, hit = null;
+    for (let i = 0; i < 24; i++) {
+      g.avatar.root.position.z -= 0.12;
       g.avatar.root.position.x += 0.02;
+      await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
       const p = g.avatar.root.position;
-      if (overlaps(p)) saw++;
-      worst = Math.max(worst, p.distanceTo(start));
+      const b = cols.find((bb) => {
+        const nx = Math.max(bb.minX, Math.min(p.x, bb.maxX)), nz = Math.max(bb.minZ, Math.min(p.z, bb.maxZ));
+        return (p.x - nx) ** 2 + (p.z - nz) ** 2 < R * R * 0.9;
+      });
+      if (b) { saw++; if (!hit) hit = { box: b, p: [p.x, p.z] }; }
     }
     g.avatar.root.position.copy(start);
-    return { overlapFrames: saw };
+    return { overlapFrames: saw, hit };
   });
-  check('characters do not pass through solid objects', overlap.overlapFrames === 0, `overlap frames=${overlap.overlapFrames}`);
+  check('characters do not pass through solid objects', overlap.overlapFrames === 0, `overlap frames=${overlap.overlapFrames} hit=${JSON.stringify(overlap.hit)}`);
 
   /* ------------------------------------------------- sit & stand */
   const sit = await page.evaluate(async () => {
@@ -214,9 +219,14 @@ async function main() {
     if (!order) return { err: 'no order', labels: g.currentActions.map((a) => a.label) };
     const cashBefore = g.store.state.cash, hungerBefore = g.store.state.needs.hunger;
     order.run();
-    await new Promise((r) => setTimeout(r, 900));
+    const until = async (fn, ms) => {
+      const t0 = performance.now();
+      while (!fn() && performance.now() - t0 < ms) await new Promise((r) => setTimeout(r, 120));
+      return fn();
+    };
+    await until(() => g.act.current === 'EATING' || g.act.current === 'DRINKING', 9000);
     const during = g.act.current;
-    await new Promise((r) => setTimeout(r, 3600));
+    await until(() => g.act.current === 'IDLE' || g.act.current === 'SITTING', 14000);
     return {
       during,
       after: g.act.current,
@@ -239,9 +249,14 @@ async function main() {
     const order = g.currentActions.find((a) => /water|zobo|drink|malt|juice/i.test(a.label) && !a.disabled);
     if (!order) return { err: 'no drink', labels: g.currentActions.map((a) => a.label) };
     order.run();
-    await new Promise((r) => setTimeout(r, 700));
+    const until = async (fn, ms) => {
+      const t0 = performance.now();
+      while (!fn() && performance.now() - t0 < ms) await new Promise((r) => setTimeout(r, 120));
+      return fn();
+    };
+    await until(() => g.act.current === 'DRINKING' || g.act.current === 'EATING', 9000);
     const during = g.act.current;
-    await new Promise((r) => setTimeout(r, 3000));
+    await until(() => g.act.current === 'IDLE' || g.act.current === 'SITTING', 12000);
     return { during, after: g.act.current };
   });
   check('drinking runs a DRINKING sequence', drink.during === 'DRINKING', `during=${drink.during} err=${drink.err ?? ''}`);

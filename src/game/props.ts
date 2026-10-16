@@ -4,11 +4,28 @@
  */
 import * as THREE from 'three';
 import { mat } from './avatar';
+import { barkTex, leafTex, frondTex, wallMaterial, tiledRoofMaterial } from './textures';
+
+/** Tile textured box faces at a consistent world scale (one repeat ≈ `tile` metres). */
+export function scaleBoxUVs(geo: THREE.BoxGeometry, w: number, h: number, d: number, tile = 3) {
+  const uv = geo.attributes.uv as THREE.BufferAttribute;
+  const dims: [number, number][] = [[d, h], [d, h], [w, d], [w, d], [w, h], [w, h]];
+  for (let f = 0; f < 6; f++) {
+    const [su, sv] = dims[f]!;
+    for (let i = 0; i < 4; i++) {
+      const k = f * 4 + i;
+      uv.setXY(k, uv.getX(k) * (su / tile), uv.getY(k) * (sv / tile));
+    }
+  }
+  uv.needsUpdate = true;
+}
 
 export interface AABB { minX: number; maxX: number; minZ: number; maxZ: number; h: number }
 
 export function box(parent: THREE.Object3D, w: number, h: number, d: number, m: THREE.Material, x: number, y: number, z: number, shadow = true) {
-  const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m);
+  const geo = new THREE.BoxGeometry(w, h, d);
+  scaleBoxUVs(geo, w, h, d);
+  const o = new THREE.Mesh(geo, m);
   o.position.set(x, y, z);
   o.castShadow = shadow; o.receiveShadow = true;
   parent.add(o);
@@ -92,28 +109,42 @@ export function signboard(parent: THREE.Object3D, text: string, w: number, h: nu
 export function palm(parent: THREE.Object3D, x: number, z: number, scale = 1, colliders?: AABB[]) {
   const g = new THREE.Group();
   g.position.set(x, 0, z); g.scale.setScalar(scale);
-  const trunkM = mat('#87664a', 0.92);
-  const segs = 5;
+  const trunkM = new THREE.MeshStandardMaterial({ map: barkTex('#8a6a48'), roughness: 0.95, metalness: 0.02 });
+  // curved, tapered trunk
+  const segs = 6;
   for (let i = 0; i < segs; i++) {
-    const t = cyl(g, 0.13 - i * 0.011, 0.16 - i * 0.011, 1.0, trunkM, Math.sin(i * 0.5) * 0.08 * i, 0.5 + i, 0, 7);
-    t.rotation.z = -0.05 * i;
+    const t = cyl(g, 0.16 - i * 0.013, 0.21 - i * 0.013, 1.08, trunkM, Math.sin(i * 0.42) * 0.10 * i, 0.52 + i * 1.0, 0, 9);
+    t.rotation.z = -0.045 * i;
   }
-  const topY = segs + 0.25, topX = Math.sin(segs * 0.5) * 0.08 * (segs - 1);
-  const leafA = mat('#2c6b3c', 0.92), leafB = mat('#357a42', 0.92);
-  // curved fronds: two segments each — lift then droop
+  const topY = segs * 1.0 + 0.3, topX = Math.sin((segs - 1) * 0.42) * 0.10 * (segs - 1);
+  // fronds: alpha-cutout planes that rise then droop — real palm silhouette
+  const frondM = new THREE.MeshStandardMaterial({ map: frondTex(), alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.88, metalness: 0 });
   for (let i = 0; i < 10; i++) {
-    const a = (i / 10) * Math.PI * 2 + 0.25;
-    const inner = box(g, 0.3, 0.05, 1.35, i % 2 ? leafA : leafB, topX, topY, 0);
-    inner.geometry = inner.geometry.clone(); inner.geometry.translate(0, 0, 0.62);
-    inner.rotation.y = a; inner.rotation.x = -0.38;
-    const outer = box(g, 0.22, 0.04, 1.25, i % 2 ? leafB : leafA, topX + Math.sin(a) * 1.16, topY + 0.46, Math.cos(a) * 1.16);
-    outer.geometry = outer.geometry.clone(); outer.geometry.translate(0, 0, 0.58);
-    outer.rotation.y = a; outer.rotation.x = 0.55;
+    const a = (i / 10) * Math.PI * 2 + 0.22;
+    const geo = new THREE.PlaneGeometry(3.1, 1.15, 6, 1);
+    geo.translate(1.55, 0, 0);
+    const pos = geo.attributes.position as THREE.BufferAttribute;
+    for (let v = 0; v < pos.count; v++) {
+      const t = Math.min(1, Math.max(0, pos.getX(v) / 3.1));
+      pos.setY(v, pos.getY(v) + 0.5 * t - 1.25 * t * t);
+    }
+    pos.needsUpdate = true;
+    geo.computeVertexNormals();
+    const f = new THREE.Mesh(geo, frondM);
+    f.position.set(topX, topY - 0.05, 0);
+    f.rotation.y = a - Math.PI / 2;
+    f.castShadow = true;
+    g.add(f);
   }
-  // crown tuft
-  const tuft = new THREE.Mesh(new THREE.SphereGeometry(0.32, 8, 6), leafA); tuft.position.set(topX, topY + 0.1, 0); g.add(tuft);
+  // crown tuft + coconuts
+  const tuft = new THREE.Mesh(new THREE.SphereGeometry(0.34, 9, 7), mat('#2c6b3c', 0.92));
+  tuft.position.set(topX, topY + 0.12, 0); tuft.castShadow = true; g.add(tuft);
   const nutM = mat('#5c3d1f', 0.9);
-  for (let i = 0; i < 3; i++) { const n = new THREE.Mesh(new THREE.SphereGeometry(0.11, 8, 6), nutM); n.position.set(topX + Math.sin(i) * 0.18, topY - 0.18, Math.cos(i) * 0.18); g.add(n); }
+  for (let i = 0; i < 3; i++) {
+    const n = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), nutM);
+    n.position.set(topX + Math.sin(i * 2.1) * 0.2, topY - 0.22, Math.cos(i * 2.1) * 0.2);
+    g.add(n);
+  }
   parent.add(g);
   colliders?.push({ minX: x - 0.3, maxX: x + 0.3, minZ: z - 0.3, maxZ: z + 0.3, h: 1 });
   return g;
@@ -122,13 +153,27 @@ export function palm(parent: THREE.Object3D, x: number, z: number, scale = 1, co
 export function tree(parent: THREE.Object3D, x: number, z: number, scale = 1, colliders?: AABB[]) {
   const g = new THREE.Group();
   g.position.set(x, 0, z); g.scale.setScalar(scale);
-  cyl(g, 0.16, 0.24, 2.3, mat('#5b4330', 0.95), 0, 1.15, 0, 8);
-  const crown = new THREE.Mesh(new THREE.IcosahedronGeometry(1.45, 1), mat('#2c6b3c', 0.92));
-  crown.position.y = 3.15; crown.scale.y = 0.88; crown.castShadow = true; g.add(crown);
-  const c2 = new THREE.Mesh(new THREE.IcosahedronGeometry(1.05, 1), mat('#3a8248', 0.92));
-  c2.position.set(0.72, 3.55, 0.35); c2.scale.y = 0.85; c2.castShadow = true; g.add(c2);
-  const c3 = new THREE.Mesh(new THREE.IcosahedronGeometry(0.8, 1), mat('#2c6b3c', 0.92));
-  c3.position.set(-0.6, 3.5, -0.3); c3.castShadow = true; g.add(c3);
+  const trunkM = new THREE.MeshStandardMaterial({ map: barkTex('#5e4632'), roughness: 0.95, metalness: 0.02 });
+  cyl(g, 0.36, 0.52, 0.4, trunkM, 0, 0.18, 0, 9);       // root flare
+  cyl(g, 0.18, 0.3, 2.7, trunkM, 0, 1.45, 0, 9);        // trunk
+  const branch = cyl(g, 0.09, 0.13, 1.15, trunkM, 0.42, 2.9, 0.12, 7);
+  branch.rotation.z = -0.85;
+  // dark inner mass so the crown has volume from every angle
+  const coreM = mat('#22542e', 0.95);
+  for (const [cx, cy, cz, r] of [[0, 3.55, 0, 1.3], [0.78, 3.85, 0.32, 0.95], [-0.72, 3.7, -0.36, 0.92], [0.12, 4.35, -0.12, 0.88]] as const) {
+    const c = new THREE.Mesh(new THREE.IcosahedronGeometry(r, 1), coreM);
+    c.position.set(cx, cy, cz); c.castShadow = true; g.add(c);
+  }
+  // crossed leafy billboards — organic silhouette, cheap to draw
+  const leafM = new THREE.MeshStandardMaterial({ map: leafTex(), alphaTest: 0.42, side: THREE.DoubleSide, roughness: 0.92, metalness: 0 });
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI;
+    const pl = new THREE.Mesh(new THREE.PlaneGeometry(4.1, 3.8), leafM);
+    pl.position.set(Math.sin(a + Math.PI / 2) * 0.18, 3.8, Math.cos(a + Math.PI / 2) * 0.18);
+    pl.rotation.y = a;
+    pl.castShadow = true;
+    g.add(pl);
+  }
   parent.add(g);
   colliders?.push({ minX: x - 0.35, maxX: x + 0.35, minZ: z - 0.35, maxZ: z + 0.35, h: 1 });
   return g;

@@ -9,6 +9,8 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { mat } from './avatar';
+import { tiled, grassTex, earthTex, asphaltTex, sidewalkTex, wallMaterial, tiledRoofMaterial, cloudPuffTex } from './textures';
+import { scaleBoxUVs } from './props';
 import { buildCivic } from './civic';
 import { bakeStatic } from './bake';
 import {
@@ -84,7 +86,7 @@ export function building(parent: THREE.Object3D, colliders: AABB[], landmarks: L
   g.position.set(x, 0, z);
   parent.add(g);
 
-  const wallM = mat(color, 0.92);
+  const wallM = wallMaterial(color);
   const trimM = mat('#efeae0', 0.88);
   const darkM = mat('#33373c', 0.75);
 
@@ -166,12 +168,37 @@ export function building(parent: THREE.Object3D, colliders: AABB[], landmarks: L
     }
   }
   // roof
-  if (style === 'bungalow' || style === 'duplex') {
-    // dark eaves line — separates wall from roof so the building reads from the far camera
+  if (style === 'duplex') {
+    // gable: two tiled slopes + ridge cap + gable ends — reads as a house from above
+    const rh = 3.1;
+    const run = fd / 2 + 0.85;
+    const slope = Math.hypot(run, rh);
+    const ang = Math.atan2(rh, run);
+    box(g, fw + 1.5, 0.22, fd + 1.5, mat('#3a444c', 0.95), 0, h + 0.04, 0); // eaves line
+    for (const sd of [-1, 1]) {
+      const slabGeo = new THREE.BoxGeometry(fw + 1.55, 0.17, slope);
+      scaleBoxUVs(slabGeo, fw + 1.55, 0.17, slope, 1.6);
+      const slab = new THREE.Mesh(slabGeo, tiledRoofMaterial('#46525c'));
+      slab.position.set(0, h + rh / 2 + 0.2, (sd * run) / 2);
+      slab.rotation.x = -sd * ang;
+      slab.castShadow = true; slab.receiveShadow = true;
+      g.add(slab);
+    }
+    box(g, fw + 1.65, 0.26, 0.42, tiledRoofMaterial('#39434c'), 0, h + rh + 0.22, 0); // ridge
+    for (const sd of [-1, 1]) {
+      const shape = new THREE.Shape();
+      shape.moveTo(-fd / 2, 0); shape.lineTo(fd / 2, 0); shape.lineTo(0, rh); shape.closePath();
+      const end = new THREE.Mesh(new THREE.ShapeGeometry(shape), wallM);
+      end.rotation.y = sd * Math.PI / 2;
+      end.position.set((sd * fw) / 2 - sd * 0.02, h + 0.12, 0);
+      end.castShadow = true;
+      g.add(end);
+    }
+  } else if (style === 'bungalow') {
     box(g, fw + 1.4, 0.22, fd + 1.4, mat('#3a444c', 0.95), 0, h + 0.04, 0);
-    const roof = new THREE.Mesh(new THREE.ConeGeometry(1, 1, 4), mat(style === 'bungalow' ? '#8a4b3a' : '#46525c', 0.92, 0.05));
+    const roof = new THREE.Mesh(new THREE.ConeGeometry(1, 1, 4), tiledRoofMaterial('#8a4b3a'));
     roof.rotation.y = Math.PI / 4;
-    const rh = style === 'bungalow' ? 2.6 : 3.4; // steeper: reads as a roof, not a slab, from above
+    const rh = 2.6;
     roof.scale.set((fw + 1.2) * 0.72, rh, (fd + 1.2) * 0.72);
     roof.position.y = h + rh / 2 + 0.12; roof.castShadow = true;
     g.add(roof);
@@ -200,24 +227,24 @@ export function buildWorld(): World {
   const bounds = 74;
 
   // ---- ground, lots, roads ---------------------------------------------
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(260, 260), mat('#79836b', 1));
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(260, 260), new THREE.MeshStandardMaterial({ map: tiled(grassTex('#6f9149'), 44, 44), roughness: 1 }));
   ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; group.add(ground);
 
-  const lot = (x: number, z: number, w: number, d: number, color: string) => {
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), mat(color, 1));
+  const lot = (x: number, z: number, w: number, d: number, tex: THREE.Texture, tint: string) => {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshStandardMaterial({ map: tiled(tex, w / 4.2, d / 4.2), color: tint, roughness: 1 }));
     m.rotation.x = -Math.PI / 2; m.position.set(x, 0.012, z); m.receiveShadow = true; group.add(m);
   };
-  lot(-26.75, -26.75, 41.5, 41.5, '#9d9a8d'); // market
-  lot(26.75, -26.75, 41.5, 41.5, '#a58c72');  // residential earth
-  lot(-26.75, 26.75, 41.5, 41.5, '#96948a');  // food
-  lot(26.75, 26.75, 41.5, 41.5, '#7f9668');   // pitch block
+  lot(-26.75, -26.75, 41.5, 41.5, earthTex('#8d8478'), '#cfc8bc'); // market
+  lot(26.75, -26.75, 41.5, 41.5, earthTex('#a58c72'), '#d9c6b0');  // residential earth
+  lot(-26.75, 26.75, 41.5, 41.5, earthTex('#96948a'), '#c9c6bc');  // food
+  lot(26.75, 26.75, 41.5, 41.5, grassTex('#64854c'), '#a8c491');   // pitch block
 
   const roads: World['roads'] = [
     { x: 0, z: 0, w: 12, d: 160 }, { x: 0, z: 0, w: 160, d: 12 },
     { x: -52, z: 0, w: 9, d: 160 }, { x: 52, z: 0, w: 9, d: 160 },
     { x: 0, z: -52, w: 160, d: 9 }, { x: 0, z: 52, w: 160, d: 9 },
   ];
-  const roadM = mat('#31363b', 0.92);
+  const roadM = new THREE.MeshStandardMaterial({ map: asphaltTex(), roughness: 0.94, metalness: 0.02 });
   for (const r of roads) { const m = new THREE.Mesh(new THREE.BoxGeometry(r.w, 0.08, r.d), roadM); m.position.set(r.x, 0.03, r.z); m.receiveShadow = true; group.add(m); }
 
   // markings (merged)
@@ -231,7 +258,7 @@ export function buildWorld(): World {
   group.add(new THREE.Mesh(mergeGeometries(markGeos)!, mat('#e7e4da', 0.88)));
 
   // sidewalks along both avenues
-  const walkM = mat('#b0aea6', 0.94);
+  const walkM = new THREE.MeshStandardMaterial({ map: sidewalkTex(), roughness: 0.95, metalness: 0.02 });
   for (const s of [-1, 1]) for (const seg of [[-78, -9], [9, 78]]) {
     const len = seg[1] - seg[0], mid = (seg[0] + seg[1]) / 2;
     const a = new THREE.Mesh(new THREE.BoxGeometry(3, 0.16, len), walkM); a.position.set(s * 7.5, 0.08, mid); a.receiveShadow = true; group.add(a);
@@ -239,7 +266,7 @@ export function buildWorld(): World {
   }
 
   // ---- roundabout ------------------------------------------------------
-  const rb = new THREE.Mesh(new THREE.CylinderGeometry(7, 7.3, 0.35, 40), mat('#718a58', 1)); rb.position.y = 0.17; rb.receiveShadow = true; group.add(rb);
+  const rb = new THREE.Mesh(new THREE.CylinderGeometry(7, 7.3, 0.35, 40), new THREE.MeshStandardMaterial({ map: tiled(grassTex('#64884e'), 3.2, 3.2), roughness: 1 })); rb.position.y = 0.17; rb.receiveShadow = true; group.add(rb);
   const kerb = new THREE.Mesh(new THREE.TorusGeometry(7.1, 0.2, 6, 40), mat('#c9c6bd', 0.9)); kerb.rotation.x = Math.PI / 2; kerb.position.y = 0.3; group.add(kerb);
   box(group, 3.2, 1.2, 3.2, mat('#8d8578', 0.9), 0, 0.9, 0);
   const plinthSign = new THREE.Mesh(new THREE.BoxGeometry(3.0, 1.6, 0.6), mat('#141a16', 0.6));
@@ -286,7 +313,7 @@ export function buildWorld(): World {
   compoundWall(group, 20.5, -24, 23, 22, 'w', colliders, '#d9d0bf');
   building(group, colliders, landmarks, 23, -24, 12, 14, 3, { facing: 'w', color: '#f0c9a0', sign: 'GIST HEIGHTS', signColors: ['#1b1b1b', '#f5c242'], balconies: true, tank: true, dish: true, gen: true });
   zones.push({ id: 'home', label: 'Gist Heights · Your flat', icon: '🏠', x: 15.4, z: -24, radius: 2.4, prompt: 'Go inside your apartment' });
-  lot(20.5, -24, 22.6, 21.6, '#9c9589'); // paved compound
+  lot(20.5, -24, 22.6, 21.6, sidewalkTex(), '#b7b2a6'); // paved compound
   car(group, 13.5, -18, 0, '#c0392b', colliders);
   car(group, 13.5, -30, 0, '#2c3e50', colliders);
   tree(group, 27, -14.5, 0.9, colliders);
@@ -337,7 +364,7 @@ export function buildWorld(): World {
   // the pitch
   {
     const px = 31, pz = 30, pw = 18, pd = 28;
-    const turf = new THREE.Mesh(new THREE.PlaneGeometry(pw, pd), mat('#3f9a4a', 1)); turf.rotation.x = -Math.PI / 2; turf.position.set(px, 0.02, pz); turf.receiveShadow = true; group.add(turf);
+    const turf = new THREE.Mesh(new THREE.PlaneGeometry(pw, pd), new THREE.MeshStandardMaterial({ map: tiled(grassTex('#3f9a4a'), pw / 3.4, pd / 3.4), roughness: 1 })); turf.rotation.x = -Math.PI / 2; turf.position.set(px, 0.02, pz); turf.receiveShadow = true; group.add(turf);
     const lineM = mat('#f2f2f2', 0.9);
     const lines: THREE.BufferGeometry[] = [];
     const L = (w: number, d: number, x: number, z: number) => { const g = new THREE.BoxGeometry(w, 0.02, d); g.translate(x, 0.04, z); lines.push(g); };
@@ -502,15 +529,21 @@ export function buildSky(scene: THREE.Scene, animated: World['animated']) {
   const sky = new THREE.Mesh(skyGeo, skyMat);
   sky.userData.uniforms = skyMat.uniforms;
   scene.add(sky);
-  const cloudM = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 1, transparent: true, opacity: 0.9, emissive: '#dfe9f3', emissiveIntensity: 0.3 });
+  const puffM = new THREE.SpriteMaterial({ map: cloudPuffTex(), transparent: true, opacity: 0.85, depthWrite: false, color: '#f4f7fb' });
   const clouds: THREE.Group[] = [];
   let seed = 11;
   const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
-  for (let i = 0; i < 12; i++) {
+  for (let i = 0; i < 10; i++) {
     const g = new THREE.Group();
-    const n = 3 + Math.floor(rnd() * 3);
-    for (let k = 0; k < n; k++) { const s = new THREE.Mesh(new THREE.SphereGeometry(6 + rnd() * 7, 10, 8), cloudM); s.position.set(k * 8 - n * 4 + rnd() * 3, rnd() * 3, rnd() * 5); s.scale.y = 0.45; g.add(s); }
-    g.position.set(-200 + rnd() * 400, 70 + rnd() * 30, -200 + rnd() * 400);
+    const n = 5 + Math.floor(rnd() * 4);
+    for (let k = 0; k < n; k++) {
+      const puff = new THREE.Sprite(puffM.clone());
+      puff.position.set(k * 11 - n * 5 + rnd() * 6, rnd() * 4, rnd() * 8);
+      const sc = 26 + rnd() * 22;
+      puff.scale.set(sc, sc * 0.52, 1);
+      g.add(puff);
+    }
+    g.position.set(-220 + rnd() * 440, 62 + rnd() * 30, -220 + rnd() * 440);
     scene.add(g); clouds.push(g);
   }
   animated.push((dt) => { for (const c of clouds) { c.position.x += dt * 1.2; if (c.position.x > 240) c.position.x = -240; } });

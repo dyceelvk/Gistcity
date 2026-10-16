@@ -156,6 +156,8 @@ export class Game implements HudHost, SocietyHost {
     const touch = matchMedia('(pointer: coarse)').matches;
     this.renderer = new THREE.WebGLRenderer({ antialias: !('ontouchstart' in window), powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, touch ? 1.25 : 1.6));
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.12;
     this.renderer.setSize(innerWidth, innerHeight);
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;

@@ -406,3 +406,34 @@ shop-camera, and map tap-anywhere checks), `scripts/db-tests.mjs` all steps, `ts
 partially addressed (perf/camera/city prioritised); graphics remain stylised low-poly
 beyond the city-life pass; an interior/furniture pass and deeper NPC schedules remain open.
 
+---
+
+## 15. Realism pass — procedural textures, real foliage, gable roofs (2026-10-16)
+
+Answering the review: "still looks like a block build game — make trees, houses,
+everything look more realistic."
+
+- **Procedural texture library** (`src/game/textures.ts`): canvas-generated plaster,
+  asphalt, sidewalk slabs, grass, soil, roof tiles, bark, leaf-cluster and palm-frond
+  cutouts, cloud puffs — all cached/shared so the static bake still batches.
+- **Foliage rebuilt**: palms get curved tapered trunks and ten drooping alpha-cutout
+  fronds (was flat green boxes); broadleaf trees get bark trunks, root flare, dark
+  inner canopy mass and six crossed leaf-billboards — organic silhouettes from every
+  angle and from the far camera.
+- **Houses rebuilt**: walls use shared textured plaster materials; duplexes get real
+  **gable roofs** (two tiled slopes + ridge cap + gable ends), bungalows tiled pyramids
+  with dark eaves lines; windows keep glass/frames.
+- **Ground & streets**: grass/soil/asphalt/slab textures with world-scaled box UVs
+  (`scaleBoxUVs`), textured roundabout lawn and pitch turf.
+- **Lighting**: ACES filmic tone mapping (exposure 1.12); clouds are soft billboard
+  puffs instead of sphere blobs.
+
+**Oracles:** game-smoke **80/80** (collision + eat/drink checks hardened to be
+frame-yielded / poll-based — the old fixed sleeps raced a software renderer),
+`scripts/db-tests.mjs` all steps, `tsc` + `npm run build` clean.
+
+**Remaining defects / follow-ups:** window glass is still flat-dark at distance;
+balconies/railings and shopfronts deserve the same detail pass; interiors/furniture
+untouched; UI colour scheme from the review is unchanged in this cut; cloud puffs
+tuneable; per-customer POS fees still need the online RPC (§11/§14).
+
