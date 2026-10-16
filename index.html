@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0a0d0b" />
+  <title>GISTCITY — Live your story</title>
+  <link rel="icon" href="./icons/icon-192.png" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <script type="module" crossorigin src="./assets/index-BLvrX5_M.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-DUpB3WBt.css">
+</head>
+<body>
+  <!-- ── icon sprite (no emoji in the chrome — crisp SVG everywhere) ── -->
+  <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
+    <defs>
+      <linearGradient id="gVolt" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#d8ff62"/><stop offset="1" stop-color="#8ee02b"/>
+      </linearGradient>
+    </defs>
+    <symbol id="i-map" viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></symbol>
+    <symbol id="i-earn" viewBox="0 0 24 24"><rect x="3" y="7.5" width="18" height="12.5" rx="2.5"/><path d="M8 7.5V6a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v1.5M3 12.5h18"/></symbol>
+    <symbol id="i-people" viewBox="0 0 24 24"><circle cx="9" cy="8.5" r="3.4"/><path d="M2.8 20c0-3.4 2.8-5.2 6.2-5.2s6.2 1.8 6.2 5.2"/><circle cx="17" cy="9.5" r="2.5"/><path d="M16.4 14.7c2.6.3 4.6 1.9 4.6 4.6"/></symbol>
+    <symbol id="i-style" viewBox="0 0 24 24"><path d="M12 3.2l1.9 4.9 4.9 1.9-4.9 1.9L12 16.8l-1.9-4.9-4.9-1.9 4.9-1.9Z"/><path d="M18.8 15.2l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8Z"/></symbol>
+    <symbol id="i-you" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.8"/><path d="M4.5 20c0-4 3.4-6 7.5-6s7.5 2 7.5 6"/></symbol>
+    <symbol id="i-dm" viewBox="0 0 24 24"><rect x="3" y="5.5" width="18" height="13" rx="2.5"/><path d="m5 8 7 5.2L19 8"/></symbol>
+    <symbol id="i-cam" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="12.5" rx="2.5"/><circle cx="12" cy="13.2" r="3.4"/><path d="M9 7l1.4-2h3.2L15 7"/></symbol>
+    <symbol id="i-car" viewBox="0 0 24 24"><path d="M5.2 15.5l1.5-5.1a2 2 0 0 1 1.9-1.4h6.8a2 2 0 0 1 1.9 1.4l1.5 5.1"/><rect x="3.5" y="13.5" width="17" height="4.6" rx="1.8"/><circle cx="7.5" cy="18.4" r="1.5"/><circle cx="16.5" cy="18.4" r="1.5"/></symbol>
+    <symbol id="i-trophy" viewBox="0 0 24 24"><path d="M8 21h8M12 17.2V21M7.5 4h9v5.2a4.5 4.5 0 0 1-9 0Z"/><path d="M7.5 6h-3a3 3 0 0 0 3 3.4M16.5 6h3a3 3 0 0 1-3 3.4"/></symbol>
+    <symbol id="i-back" viewBox="0 0 24 24"><path d="m14.5 5-7 7 7 7"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="m6.5 6.5 11 11M17.5 6.5l-11 11"/></symbol>
+    <symbol id="i-send" viewBox="0 0 24 24"><path d="M21 3 10.5 13.5M21 3l-6.5 18-4-8.5L2 8.5Z"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m4.5 12.5 5 5L19.5 7"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-home" viewBox="0 0 24 24"><path d="m4 11 8-7 8 7"/><path d="M6.2 9.8V20h11.6V9.8"/><path d="M10 20v-5.2h4V20"/></symbol>
+    <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 20.2s-7.2-4.6-7.2-10.3A4.1 4.1 0 0 1 12 7.2a4.1 4.1 0 0 1 7.2 2.7c0 5.7-7.2 10.3-7.2 10.3Z"/></symbol>
+    <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 2.5 4.5 14H10l-1 7.5L18.5 10H13Z"/></symbol>
+    <symbol id="i-drop" viewBox="0 0 24 24"><path d="M12 3.2s6.2 6.6 6.2 11.1a6.2 6.2 0 1 1-12.4 0C5.8 9.8 12 3.2 12 3.2Z"/></symbol>
+    <symbol id="i-food" viewBox="0 0 24 24"><path d="M4 11.2h16a8 8 0 0 1-16 0Z"/><path d="M9.2 7.6c0-1.1 1-1.6 1-2.6M13.2 7.6c0-1.1 1-1.6 1-2.6"/><path d="M6 19.4h12"/></symbol>
+    <symbol id="i-wallet" viewBox="0 0 24 24"><rect x="3" y="6.5" width="18" height="12.5" rx="2.5"/><path d="M3 10.5h18"/><circle cx="16.5" cy="14.5" r="1.2" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.6"/><path d="M12 7.2V12l3.4 2"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l7.2 3v5.2c0 5-3.1 8.1-7.2 10-4.1-1.9-7.2-5-7.2-10V6Z"/><path d="m9 12 2 2 4-4"/></symbol>
+    <symbol id="i-star" viewBox="0 0 24 24"><path d="m12 3.6 2.6 5.3 5.9.9-4.3 4.1 1 5.9-5.2-2.8-5.2 2.8 1-5.9-4.3-4.1 5.9-.9Z"/></symbol>
+    <symbol id="i-gift" viewBox="0 0 24 24"><rect x="4" y="9.5" width="16" height="10.5" rx="1.6"/><path d="M4 13.2h16M12 9.5V20"/><path d="M12 9.5C10 9.5 7.6 8.8 7.6 6.9 7.6 5.6 8.6 4.8 9.8 4.8c2 0 2.2 2.4 2.2 4.7Zm0 0c2 0 4.4-.7 4.4-2.6 0-1.3-1-2.1-2.2-2.1-2 0-2.2 2.4-2.2 4.7Z"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 19.2h16"/><path d="m5.5 15.5 4-5 3.4 3L18.5 7"/><path d="M14.8 7h3.7v3.7"/></symbol>
+    <symbol id="i-ring" viewBox="0 0 24 24"><circle cx="9" cy="14.5" r="4.4"/><circle cx="15" cy="14.5" r="4.4"/><path d="m12 4 1.7 2.2h-3.4Z"/></symbol>
+    <symbol id="i-cap" viewBox="0 0 24 24"><path d="M2.5 9 12 5.2 21.5 9 12 12.8Z"/><path d="M6.2 11v4.8c0 1.5 2.9 2.9 5.8 2.9s5.8-1.4 5.8-2.9V11"/></symbol>
+    <symbol id="i-cross" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="4"/><path d="M12 8.2v7.6M8.2 12h7.6"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.5 12S6 6.4 12 6.4 21.5 12 21.5 12 18 17.6 12 17.6 2.5 12 2.5 12Z"/><circle cx="12" cy="12" r="2.9"/></symbol>
+    <symbol id="i-bag" viewBox="0 0 24 24"><path d="M6.2 8h11.6l1 12H5.2Z"/><path d="M9.2 8V6.4a2.8 2.8 0 0 1 5.6 0V8"/></symbol>
+    <symbol id="i-doc" viewBox="0 0 24 24"><path d="M7 3.5h7l4.2 4.2V20.5H7Z"/><path d="M14 3.5v4.2h4.2M9.6 12.5h5M9.6 15.5h5"/></symbol>
+    <symbol id="i-scan" viewBox="0 0 24 24"><path d="M4 8.5V6a2 2 0 0 1 2-2h2.5M15.5 4H18a2 2 0 0 1 2 2v2.5M20 15.5V18a2 2 0 0 1-2 2h-2.5M8.5 20H6a2 2 0 0 1-2-2v-2.5"/><circle cx="12" cy="11" r="2.2"/><path d="M8.6 16.4c.6-1.6 1.9-2.4 3.4-2.4s2.8.8 3.4 2.4"/></symbol>
+    <symbol id="i-compass" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.6"/><path d="m15.2 8.8-2 6.4-6.4 2 2-6.4Z"/></symbol>
+    <symbol id="i-chev" viewBox="0 0 24 24"><path d="m9.5 5 7 7-7 7"/></symbol>
+    <symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 4 2.8 20h18.4Z"/><path d="M12 10v4.4M12 17.2v.2"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5Z"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><path d="M9 5.5v13M15 5.5v13"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v4.4h-4.4"/></symbol>
+    <symbol id="i-shirt" viewBox="0 0 24 24"><path d="M8.5 4 4 6.5 6 10.5l2-1v9.5h8V9.5l2 1 2-4L15.5 4a3.2 3.2 0 0 1-7 0Z"/></symbol>
+    <symbol id="i-money" viewBox="0 0 24 24"><rect x="2.8" y="6" width="18.4" height="12" rx="2.2"/><circle cx="12" cy="12" r="2.6"/><path d="M6 9.4v5.2M18 9.4v5.2"/></symbol>
+    <symbol id="i-hand" viewBox="0 0 24 24"><path d="M8.5 11.5V5.8a1.5 1.5 0 0 1 3 0v5.2m0-1.2a1.5 1.5 0 0 1 3 0v1.6m0-1a1.5 1.5 0 0 1 3 0v4.4c0 3.6-2.4 6.2-6 6.2-2.4 0-3.8-1-5.2-3l-2.4-3.5a1.6 1.6 0 0 1 2.4-2.1l1.2 1.3"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 10a6 6 0 1 1 12 0c0 4 1.6 5.4 1.6 5.4H4.4S6 14 6 10Z"/><path d="M10 19a2.1 2.1 0 0 0 4 0"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.2A8.2 8.2 0 0 1 9.8 4 8.4 8.4 0 1 0 20 14.2Z"/></symbol>
+    <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3.2" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3"/></symbol>
+    <symbol id="i-flag" viewBox="0 0 24 24"><path d="M6 21V4"/><path d="M6 4.6c4-2 8 2 12 0v9c-4 2-8-2-12 0Z"/></symbol>
+    <symbol id="i-mask" viewBox="0 0 24 24"><path d="M4 8.5c2.5-1.6 5.2-2.4 8-2.4s5.5.8 8 2.4c-.5 6.6-3.2 10-8 10s-7.5-3.4-8-10Z"/><path d="M9 12h.2M15 12h.2M9.5 15.6c1.6 1 3.4 1 5 0"/></symbol>
+  </svg>
+
+  <main id="shell">
+    <div id="view" aria-label="GIST 3D world"></div>
+
+    <!-- ───────────────────────── world HUD ───────────────────────── -->
+    <header class="topbar">
+      <div class="brand">
+        <div class="mark">G</div>
+        <div class="brandText"><strong>GISTCITY</strong><small>POWERED BY RIEL INC.</small></div>
+      </div>
+      <div class="topRight">
+        <div class="pill clockPill" title="City time"><svg class="ic14"><use href="#i-clock"/></svg><span id="clock">06:00</span></div>
+        <div class="pill levelPill" title="Level"><small>LVL</small><strong id="levelNum">1</strong><i class="xpBar"><b id="xpFill"></b></i></div>
+        <div class="pill wallet" title="Your G wallet"><span class="naira">G</span><div><small>WALLET</small><strong id="cash">10,000 G</strong></div></div>
+        <button class="pill iconBtn" data-open="dm" aria-label="Messages"><svg class="ic18"><use href="#i-dm"/></svg><b class="badge hidden" id="dmBadge"></b></button>
+        <button class="pill status" id="accountBtn" title="Account & sync"><span class="dot" id="statusDot"></span><span id="statusText">Offline</span></button>
+      </div>
+    </header>
+
+    <!-- tappable minimap → full map screen -->
+    <button class="minimapCard" id="minimapBtn" aria-label="Open city map">
+      <canvas id="minimap" width="176" height="176"></canvas>
+      <span class="minimapLabel"><svg class="ic12"><use href="#i-compass"/></svg>MAP</span>
+    </button>
+
+    <div class="leftCol">
+      <div class="locPill"><span class="live"></span><div><small>YOU ARE IN</small><strong id="district">GIST CITY · CENTRAL</strong></div></div>
+      <div class="objective" id="objective">
+        <div class="objIcon" id="objIcon">✦</div>
+        <div><small id="objKicker">YOUR NEXT MOVE</small><strong id="objTitle">Explore Gist City</strong><p id="objText">Walk around, find the glowing markers and start your story.</p></div>
+      </div>
+      <div class="needs" id="needs" aria-label="Needs">
+        <div class="need" data-level="ok" title="Hunger"><svg class="ic14"><use href="#i-food"/></svg><i><b id="needHunger"></b></i></div>
+        <div class="need" data-level="ok" title="Thirst"><svg class="ic14"><use href="#i-drop"/></svg><i><b id="needThirst"></b></i></div>
+        <div class="need" data-level="ok" title="Energy"><svg class="ic14"><use href="#i-bolt"/></svg><i><b id="needEnergy"></b></i></div>
+        <div class="need" data-level="ok" title="Health"><svg class="ic14"><use href="#i-heart"/></svg><i><b id="needHealth"></b></i></div>
+      </div>
+      <div class="actChip hidden" id="actChip"><span id="actChipIcon">💬</span><strong id="actChipText"></strong></div>
+    </div>
+
+    <!-- floating right controls -->
+    <div class="floatRight">
+      <button class="round" id="camBtn" aria-label="Camera"><svg class="ic20"><use href="#i-cam"/></svg></button>
+      <button class="round" id="runBtn" aria-label="Toggle run"><svg class="ic20"><use href="#i-bolt"/></svg><span>RUN</span></button>
+    </div>
+
+    <!-- bottom dock: screen-to-screen navigation -->
+    <nav class="dock" aria-label="Main">
+      <button class="dockBtn" data-open="map"><svg class="ic22"><use href="#i-map"/></svg><span>Map</span></button>
+      <button class="dockBtn" data-open="jobs"><svg class="ic22"><use href="#i-earn"/></svg><span>Earn</span></button>
+      <button class="dockBtn dockMain" data-open="style" aria-label="Style Studio">
+        <i class="dockFab"><svg class="ic26"><use href="#i-style"/></svg></i><span>Style</span>
+      </button>
+      <button class="dockBtn" data-open="online"><svg class="ic22"><use href="#i-people"/></svg><span>People</span></button>
+      <button class="dockBtn" data-open="life"><svg class="ic22"><use href="#i-you"/></svg><span>You</span></button>
+    </nav>
+
+    <div class="playerTag"><div class="avatarMini" id="avatarMini">G</div><div><strong id="playerName">New GistCitizen</strong><small id="playerVibe">CASUAL VIBE</small></div></div>
+    <div class="hint" id="hint"><span>W A S D</span> move · <span>SHIFT</span> run · <span>E</span> / <span>1-6</span> actions · drag to look · scroll to zoom</div>
+
+    <!-- contextual action menu -->
+    <div class="actionMenu hidden" id="actionMenu"><small id="actionTitle"></small><div id="actionList"></div></div>
+    <div class="emote" id="emote"></div>
+    <div class="joy" id="joy"><div class="joyKnob" id="joyKnob"></div></div>
+
+    <div class="toast" id="toast"></div>
+
+    <div class="driveHud hidden" id="driveHud">
+      <div class="driveInfo"><svg class="ic20"><use href="#i-car"/></svg><div><small id="driveName">Driving</small><strong><span id="driveSpeed">0</span> <em>km/h</em></strong></div></div>
+      <button class="primary wAuto" id="driveExit">PARK &amp; EXIT</button>
+    </div>
+
+    <div class="sleep hidden" id="sleep"><div class="sleepCard">
+      <div class="sleepMoon"><svg class="ic26"><use href="#i-moon"/></svg></div>
+      <strong>Sleeping…</strong><p>Energy <span id="sleepEnergy">0%</span></p>
+      <i class="sleepBar"><b id="sleepFill"></b></i>
+      <button class="primary" id="wakeBtn">WAKE UP</button>
+    </div></div>
+
+    <div class="fade" id="fade"><div class="fadeMsg" id="fadeMsg"></div></div>
+
+    <div class="ask hidden" id="ask"><div class="askCard">
+      <strong id="askTitle"></strong><p class="muted" id="askHint"></p>
+      <input id="askInput" inputmode="numeric" autocomplete="off" />
+      <div class="askRow"><button class="ghost wAuto" id="askCancel">Cancel</button><button class="primary wAuto" id="askOk">SEND</button></div>
+    </div></div>
+
+    <div class="dialogue hidden" id="dialogue">
+      <div class="dlgHead"><div class="avatarMini" id="dlgAvatar">?</div><div><small id="dlgRole">CITIZEN</small><strong id="dlgName"></strong></div><button class="ghost iconGhost dlgX" id="dlgClose" aria-label="End conversation"><svg class="ic18"><use href="#i-x"/></svg></button></div>
+      <p class="dlgLine" id="dlgLine"></p>
+      <div class="dlgChoices" id="dlgChoices"></div>
+    </div>
+
+    <div class="changing hidden" id="changing">
+      <div class="changingTag"><svg class="ic18"><use href="#i-shield"/></svg><strong>CHANGING ROOM</strong><span>Private — only you can see this</span></div>
+    </div>
+
+    <div class="minigame hidden" id="minigame">
+      <div class="mgCard">
+        <small id="mgKicker">ROUND 1 / 5</small>
+        <h3 id="mgTitle">Serve the customer</h3>
+        <div class="mgTrack"><div class="mgZone" id="mgZone"></div><div class="mgNeedle" id="mgNeedle"></div></div>
+        <p class="mgResult" id="mgResult">&nbsp;</p>
+        <button class="primary" id="mgTap">TAP!</button>
+      </div>
+    </div>
+
+    <!-- ─────────────── full screens (screen-to-screen navigation) ─────────────── -->
+    <section class="panel hidden" id="panel-style">
+      <div class="panelHead"><div><small id="styleKicker">STYLE STUDIO</small><h2>Your Character</h2></div><button class="close" data-close aria-label="Back"><svg class="ic20"><use href="#i-back"/></svg></button></div>
+      <label>Display name</label>
+      <input id="nameInput" maxlength="24" placeholder="Enter a name" autocomplete="off" />
+      <label>One-tap vibe</label><div class="chips" id="vibeChips"></div>
+      <label>Skin tone</label><div class="swatches" id="skinSwatches"></div>
+      <label>Build</label><div class="chips" id="buildChips"></div>
+      <label>Body</label><div class="chips" id="bodyChips"></div>
+      <label>Face shape</label><div class="chips" id="faceChips"></div>
+      <label>Hair</label><div class="chips" id="hairChips"></div>
+      <label>Hair colour</label><div class="swatches" id="hairColors"></div>
+      <label>Beard</label><div class="chips" id="beardChips"></div>
+      <label>Lips / makeup</label><div class="swatches" id="lipSwatches"></div>
+      <label>Top <a class="linkBtn" data-open="store">shop →</a></label><div class="chips" id="topChips"></div><div class="swatches" id="topColors"></div>
+      <label>Bottom</label><div class="chips" id="bottomChips"></div><div class="swatches" id="bottomColors"></div>
+      <label>Shoes</label><div class="chips" id="shoeChips"></div><div class="swatches" id="shoeColors"></div>
+      <label>Accessories</label><div class="chips" id="accChips"></div>
+      <button class="ghost scanBtn" id="scanBtn"><svg class="ic18"><use href="#i-scan"/></svg> Face scan — match my skin tone</button>
+      <button class="primary" id="styleDone">DONE</button>
+    </section>
+
+    <section class="panel hidden" id="panel-store">
+      <div class="panelHead"><div><small>GIST MARKET</small><h2>Store</h2></div><button class="close" data-close aria-label="Back"><svg class="ic20"><use href="#i-back"/></svg></button></div>
+      <div class="tabs" id="storeTabs"><button data-tab="top" class="on">Fits</button><button data-tab="accessory">Accessories</button><button data-tab="furniture">Home</button></div>
+      <div class="cards" id="storeCards"></div>
+    </section>
+
+    <section class="panel hidden" id="panel-home">
+      <div class="panelHead"><div><small>GIST HEIGHTS</small><h2>Your Space</h2></div><button class="close" data-close aria-label="Back"><svg class="ic20"><use href="#i-back"/></svg></button></div>
+      <p class="muted">Furniture you own appears here. Toggle pieces on and off, or <a class="linkBtn" data-open="store" data-tab="furniture">buy more →</a></p>
+      <div class="cards" id="homeCards"></div>
+    </section>
+
+    <section class="panel hidden" id="panel-jobs">
+      <div class="panelHead"><div><small>HUSTLE HUB</small><h2>Earn</h2></div><button class="close" data-close aria-label="Back"><svg class="ic20"><use href="#i-back"/></svg></button></div>
+      <div id="jobActive"></div>
+      <div class="cards" id="jobCards"></div>
+    </section>
+
+    <section class="panel hidden" id="panel-life">
+      <div class="panelHead"><div><small>MY LIFE</small><h2 id="lifeName">New GistCitizen</h2></div><button class="close" data-close aria-label="Back"><svg class="ic20"><use href="#i-back"/></svg></button></div>
+      <div class="navRows">
+        <button class="navRow" data-open="style"><i class="rowIc"><svg class="ic20"><use href="#i-style"/></svg></i><span><strong>Style Studio</strong><small>Looks, fits &amp; face scan</small></span><svg class="ic16 chev"><use href="#i-chev"/></svg></button>
+        <button class="navRow" data-open="vehicles"><i class="rowIc"><svg class="ic20"><use href="#i-car"/></svg></i><span><strong>My Garage</strong><small>Cars you own · drive &amp; park</small></span><svg class="ic16 chev"><use href="#i-chev"/></svg></button>
+        <button class="navRow" data-open="registry"><i class="rowIc"><svg class="ic20"><use href="#i-ring"/></svg></i><span><strong>Family &amp; Marriage</strong><small>Registry, marriage, newborns</small></span><svg class="ic16 chev"><use href="#i-chev"/></svg></button>
+        <button class="navRow" data-open="revenue"><i class="rowIc"><svg class="ic20"><use href="#i-chart"/></svg></i><span><strong>Business &amp; Investing</strong><small>Permits, market runs, city funds</small></span><svg class="ic16 chev"><use href="#i-chev"/></svg></button>
+        <button class="navRow" data-open="store"><i class="rowIc"><svg class="ic20"><use href="#i-bag"/></svg></i><span><strong>Store</strong><small>Fits, accessories, furniture</small></span><svg class="ic16 chev"><use href="#i-chev"/></svg></button>
+        <button class="navRow" data-open="home"><i class="rowIc"><svg class="ic20"><use href="#i-home"/></svg></i><span><strong>Your Space</strong><small>Furniture at Gist Heights</small></span><svg class="ic16 chev"><use href="#i-chev"/></svg></button>
+        <button class="navRow" data-open="account"><i class="rowIc"><svg class="ic20"><use href="#i-shield"/></svg></i><span><strong>Account</strong><small>Sign in, sync &amp; settings</small></span><svg class="ic16 chev"><use href="#i-chev"/></svg></button>
+      </div>
+      <label>Vitals</label>
+      <div class="statGrid" id="statGrid"></div>
+      <label>Achievements</label>
+      <div class="achievements" id="achievements"></div>
+      <button class="ghost danger" id="resetBtn">Reset my save</button>
+    </section>
+
+    <section class="panel hidden" id="panel-rank">
+      <div class="panelHead"><div><small>THE GIST LEADERBOARD</small><h2>Rankings</h2></div><button class="close" data-close aria-label="Back"><svg class="ic20"><use href="#i-back"/></svg></button></div>
+      <p class="muted" id="rankNote"></p>
+      <table class="rankTable"><thead><tr><th>#</th><th>Player</th><th>Pop.</th><th>Lvl</th><th>Cash</th></tr></thead><tbody id="rankBody"></tbody></table>
+    </section>
+
+    <section class="panel hidden" id="panel-map">
+      <div class="panelHead"><div><small>GIST CITY</small><h2>City Map</h2></div><button class="close" data-close aria-label="Back"><svg class="ic20"><use href="#i-back"/></svg></button></div>
+      <div class="mapWrap">
+        <canvas id="bigmap" width="640" height="640"></canvas>
+        <div class="mapSheet hidden" id="mapSheet">
+          <div class="mapSheetGrip"></div>
+          <strong id="mapSheetName">Place</strong>
+          <p class="muted" id="mapSheetText">Tap anywhere on the map — set a point to go to.</p>
+          <div class="mapSheetRow">
+            <button class="primary wAuto" id="mapGo">SET WAYPOINT</button>
+            <button class="ghost wAuto" id="mapClear">CLEAR</button>
+          </div>
+        </div>
+      </div>
+      <div class="legend" id="mapLegend"></div>
+      <p class="muted tapHint">Tap any pin on the map to visit it.</p>
+    </section>
+
+    <section class="panel hidden" id="panel-account">
+      <div class="panelHead"><div><small>YOUR ACCOUNT</small><h2>Account</h2></div><button class="close" data-close aria-label="Back"><svg class="ic20"><use href="#i-back"/></svg></button></div>
+      <div id="accountBody"></div>
+    </section>
+
+    <section class="panel hidden" id="panel-school">
+      <div class="panelHead"><div><small>UNITY COLLEGE</small><h2>Education</h2></div><button class="close" data-close aria-label="Back"><svg class="ic20"><use href="#i-back"/></svg></button></div>
+      <div id="schoolBody" class="sbody"></div>
+    </section>
+
+    <section class="panel hidden" id="panel-gov">
+      <div class="panelHead"><div><small>GOVERNMENT SECRETARIAT</small><h2>Employment</h2></div><button class="close" data-close aria-label="Back"><svg class="ic20"><use href="#i-back"/></svg></button></div>
+      <div id="govBody" class="sbody"></div>
+    </section>
+
+    <section class="panel hidden" id="panel-hospital">
+      <div class="panelHead"><div><small>GISTCITY GENERAL HOSPITAL</small><h2>Health</h2></div><button class="close" data-close aria-label="Back"><svg class="ic20"><use href="#i-back"/></svg></button></div>
+      <div id="hospitalBody" class="sbody"></div>
+    </section>
+
+    <section class="panel hidden" id="panel-church">
+      <div class="panelHead"><div><small>GRACE CHAPEL</small><h2>Church</h2></div><button class="close" data-close aria-label="Back"><svg class="ic20"><use href="#i-back"/></svg></button></div>
+      <div id="churchBody" class="sbody"></div>
+    </section>
+
+    <section class="panel hidden" id="panel-dealer">
+      <div class="panelHead"><div><small>ODOGWU MOTORS</small><h2>Showroom</h2></div><button class="close" data-close aria-label="Back"><svg class="ic20"><use href="#i-back"/></svg></button></div>
+      <div id="dealerBody" class="sbody"></div>
+    </section>
+
+    <section class="panel hidden" id="panel-vehicles">
+      <div class="panelHead"><div><small>YOUR GARAGE</small><h2>Vehicles</h2></div><button class="close" data-close aria-label="Back"><svg class="ic20"><use href="#i-back"/></svg></button></div>
+      <div id="vehiclesBody" class="sbody"></div>
+    </section>
+
+    <section class="panel hidden" id="panel-online">
+      <div class="panelHead"><div><small>GISTCITY</small><h2>People</h2></div><button class="close" data-close aria-label="Back"><svg class="ic20"><use href="#i-back"/></svg></button></div>
+      <div class="navRows">
+        <button class="navRow" data-open="dm"><i class="rowIc"><svg class="ic20"><use href="#i-dm"/></svg></i><span><strong>Messages</strong><small>Private chats with citizens</small></span><svg class="ic16 chev"><use href="#i-chev"/></svg></button>
+        <button class="navRow" data-open="rank"><i class="rowIc"><svg class="ic20"><use href="#i-trophy"/></svg></i><span><strong>Rankings</strong><small>Who runs the city</small></span><svg class="ic16 chev"><use href="#i-chev"/></svg></button>
+      </div>
+      <label>Citizens</label>
+      <div id="onlineBody" class="sbody"></div>
+    </section>
+
+    <section class="panel hidden" id="panel-profile">
+      <div class="panelHead"><div><small id="profileKicker">CITIZEN</small><h2 id="profileTitle">Profile</h2></div><button class="close" data-close aria-label="Back"><svg class="ic20"><use href="#i-back"/></svg></button></div>
+      <div id="profileBody"></div>
+    </section>
+
+    <section class="panel hidden" id="panel-dm">
+      <div class="panelHead"><div><small>PRIVATE</small><h2>Messages</h2></div><button class="close" data-close aria-label="Back"><svg class="ic20"><use href="#i-back"/></svg></button></div>
+      <div id="dmBody" class="sbody"></div>
+    </section>
+
+    <section class="panel hidden" id="panel-registry">
+      <div class="panelHead"><div><small>CIVIL REGISTRY</small><h2>Family &amp; Marriage</h2></div><button class="close" data-close aria-label="Back"><svg class="ic20"><use href="#i-back"/></svg></button></div>
+      <div id="registryBody" class="sbody"></div>
+    </section>
+
+    <section class="panel hidden" id="panel-revenue">
+      <div class="panelHead"><div><small>CITY REVENUE DESK</small><h2>Business &amp; Investing</h2></div><button class="close" data-close aria-label="Back"><svg class="ic20"><use href="#i-back"/></svg></button></div>
+      <div id="revenueBody" class="sbody"></div>
+    </section>
+
+    <!-- sign in / create account (shown only when the game runs with a backend) -->
+    <div class="auth hidden" id="auth"></div>
+
+    <!-- loading -->
+    <div class="loading" id="loading">
+      <div class="loadLogo">G</div>
+      <strong>ENTERING GISTCITY</strong>
+      <span id="loadMsg">Building your neighbourhood…</span>
+      <div class="loadBar"><i></i></div>
+      <em class="poweredBy">Powered by Riel Inc.</em>
+    </div>
+  </main>
+</body>
+</html>
